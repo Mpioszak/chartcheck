@@ -1,5 +1,5 @@
-// The fact checker. It reads a narrative and rejects any time, number or drug
-// name that the medic did not enter.
+// The fact checker. It reads a narrative and rejects any value that doesn't
+// match the fact it belongs to.
 //
 // Narrative format: every sentence (or run of sentences) ends with a source
 // tag listing the fact ids it was written from, e.g.
@@ -8,51 +8,18 @@
 //
 // A tag covers all text since the previous tag. Text with no tag is rejected,
 // because a sentence with no source is how a fluent invented fact slips in.
-// Within a tagged span, every time, number and drug name must appear in one of
-// the cited facts, not just somewhere in the report.
+//
+// Within a tagged span, values are checked as claims (see claims.js), not as
+// loose numbers: a reading must match the cited reading of the vital it's
+// written next to, a dose must match its drug's cited dose and unit, a route
+// its drug's cited route, and a time the cited time of the vital, drug or
+// milestone it's written with. Every cited vital's reading must be stated.
 
 import { factText } from './schema.js';
-import { DRUG_ALIASES, canonicalDrug } from './drugs.js';
+import { canonicalDrug } from './drugs.js';
+import { factClaims, formatTime, makeReader, sameValue, subjectName } from './claims.js';
 
-const TIME_RE = /(?<![\d:])([01]?\d|2[0-3]):([0-5]\d)(?![\d:])/g;
-const NUM_RE = /\d+(?:\.\d+)?|\.\d+/g;
-// Terms that contain digits but are not numeric claims.
-const DIGIT_TERMS_RE = /(?<![a-z0-9])(?:spo2|etco2|co2|o2|1[25][- ]lead|d5w)(?![a-z0-9])/g;
-const NUMBER_WORDS = [
-  'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve',
-  'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety', 'hundred', 'dozen',
-];
-const NUMBER_WORD_RE = new RegExp(`(?<![a-z])(${NUMBER_WORDS.join('|')})(?![a-z])`, 'g');
 const TAG_RE = /\[([^\]]*)\]/g;
-
-function escapeRe(s) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function drugMatcher(names) {
-  const sorted = [...new Set(names.map((n) => n.trim().toLowerCase()).filter(Boolean))]
-    .sort((a, b) => b.length - a.length);
-  return new RegExp(`(?<![a-z0-9])(${sorted.map(escapeRe).join('|')})(?![a-z0-9])`, 'g');
-}
-
-// Pulls out the checkable claims in a piece of text.
-export function extractClaims(text, drugRe) {
-  let s = String(text).toLowerCase();
-  const drugs = new Set();
-  s = s.replace(drugRe, (m) => { drugs.add(canonicalDrug(m)); return ' '; });
-  s = s.replace(DIGIT_TERMS_RE, ' ');
-  const times = new Set();
-  s = s.replace(TIME_RE, (_, h, m) => { times.add(h.padStart(2, '0') + m); return ' '; });
-  const numbers = [];
-  s = s.replace(NUM_RE, (m) => { numbers.push({ raw: m, value: String(Number(m)) }); return ' '; });
-  const numberWords = [...s.matchAll(NUMBER_WORD_RE)].map((m) => m[1]);
-  return { drugs, times, numbers, numberWords };
-}
-
-function supportOf(facts, drugRe) {
-  const claims = extractClaims(facts.map(factText).join(' \n '), drugRe);
-  return { drugs: claims.drugs, times: claims.times, numbers: new Set(claims.numbers.map((n) => n.value)) };
-}
 
 // Splits a narrative into spans, each with the tag that closes it.
 export function splitSpans(narrative) {
@@ -69,23 +36,98 @@ export function splitSpans(narrative) {
   return spans;
 }
 
+const quote = (s) => `"${s}"`;
+const name = (subject) => subjectName(subject);
+
+function show(s) {
+  switch (s.kind) {
+    case 'value': return `${s.value} (${s.factId})`;
+    case 'dose': return `${s.value} ${s.unit} (${s.factId})`;
+    case 'route': return `${s.route} (${s.factId})`;
+    case 'time': return `${formatTime(s.time)} (${s.factId})`;
+    default: return s.factId;
+  }
+}
+
+const list = (items) => [...new Set(items.map(show))].join(' or ');
+
+// Compares one narrative claim with the cited facts' claims. Returns an error
+// message, or null when a cited fact supports it.
+function verify(c, cited, elsewhere) {
+  switch (c.kind) {
+    case 'value': {
+      if (c.subject) {
+        const same = cited.filter((s) => s.kind === 'value' && s.subject === c.subject);
+        if (same.some((s) => sameValue(c.subject, s.value, c.value))) return null;
+        const what = c.subject === 'duration' ? 'a duration' : name(c.subject);
+        if (same.length) return `${quote(c.raw)} is given as ${what}, but the cited ${name(c.subject)} is ${list(same)}.`;
+        return `${quote(c.raw)} is given as ${what}, but no cited fact has a ${name(c.subject)}.`
+          + elsewhere((s) => s.kind === 'value' && s.subject === c.subject && sameValue(c.subject, s.value, c.value));
+      }
+      const match = (s) => (s.kind === 'value' || s.kind === 'dose') && sameValue(s.subject, s.value, c.value);
+      if (cited.some(match)) return null;
+      return `The number ${quote(c.raw)} isn't in the cited facts.` + elsewhere(match);
+    }
+    case 'dose': {
+      if (!c.drug) {
+        const match = (s) => s.kind === 'dose' && s.value === c.value && s.unit === c.unit;
+        if (cited.some(match)) return null;
+        return `The dose ${quote(c.raw)} isn't in the cited facts.` + elsewhere(match);
+      }
+      const doses = cited.filter((s) => s.kind === 'dose' && s.drug === c.drug);
+      if (doses.some((s) => s.value === c.value && s.unit === c.unit)) return null;
+      if (!c.unit) {
+        return `${quote(c.raw)} is given for ${c.drug} without a unit.`
+          + (doses.length ? ` The cited dose is ${list(doses)}.` : '');
+      }
+      if (doses.length) return `${quote(c.raw)} is given for ${c.drug}, but the cited dose is ${list(doses)}.`;
+      return `${quote(c.raw)} is given for ${c.drug}, but no cited fact has a dose of ${c.drug}.`
+        + elsewhere((s) => s.kind === 'dose' && s.drug === c.drug && s.value === c.value && s.unit === c.unit);
+    }
+    case 'route': {
+      if (!c.drug) {
+        // A dose nobody entered is already its own error.
+        const routes = cited.filter((s) => s.kind === 'route' && s.dose === c.dose && s.unit === c.unit);
+        if (!routes.length || routes.some((s) => s.route === c.route)) return null;
+        return `${quote(c.raw)} is given as the route for ${c.dose} ${c.unit}, but the cited route is ${list(routes)}.`;
+      }
+      const routes = cited.filter((s) => s.kind === 'route' && s.drug === c.drug);
+      if (routes.some((s) => s.route === c.route)) return null;
+      if (routes.length) return `${quote(c.raw)} is given as the route for ${c.drug}, but the cited route is ${list(routes)}.`;
+      return `${quote(c.raw)} is given as the route for ${c.drug}, but no cited fact has a route for it.`;
+    }
+    case 'time': {
+      if (!c.subject) {
+        const match = (s) => s.kind === 'time' && s.time === c.time;
+        if (cited.some(match)) return null;
+        return `Time ${formatTime(c.time)} isn't in the cited facts.` + elsewhere(match);
+      }
+      const times = cited.filter((s) => s.kind === 'time' && s.subject === c.subject);
+      if (times.some((s) => s.time === c.time)) return null;
+      if (times.length) return `${formatTime(c.time)} is given for ${name(c.subject)}, but the cited time is ${list(times)}.`;
+      return `${formatTime(c.time)} is given for ${name(c.subject)}, but no cited fact has a time for ${name(c.subject)}.`
+        + elsewhere((s) => s.kind === 'time' && s.subject === c.subject && s.time === c.time);
+    }
+    case 'drug': {
+      const match = (s) => s.kind === 'drug' && s.drug === c.drug;
+      if (cited.some(match)) return null;
+      return `The drug "${c.drug}" isn't in the cited facts.` + elsewhere(match);
+    }
+  }
+  return null;
+}
+
 export function checkNarrative(facts, narrative) {
   const byId = new Map(facts.map((f) => [f.id, f]));
-  const enteredDrugs = facts.filter((f) => f.kind === 'med' && f.drug).map((f) => f.drug);
-  const drugRe = drugMatcher([...Object.keys(DRUG_ALIASES), ...enteredDrugs]);
-  const supportById = new Map(facts.map((f) => [f.id, supportOf([f], drugRe)]));
+  const reader = makeReader(facts.filter((f) => f.kind === 'med' && f.drug).map((f) => f.drug));
+  const supportById = new Map(facts.map((f) => [f.id, factClaims(f, reader, byId)]));
 
   const errors = [];
   const warnings = [];
   const cited = new Set();
+  const medsStated = new Set();
+  const drugsWithErrors = new Set();
   const spans = splitSpans(narrative);
-
-  const whereElse = (field, value) => {
-    const ids = [...supportById].filter(([, s]) => s[field].has(value)).map(([id]) => id);
-    return ids.length
-      ? ` It was entered in ${ids.join(', ')}, which this sentence doesn't cite.`
-      : ' Nothing entered contains it.';
-  };
 
   spans.forEach((span, i) => {
     const at = { span: i, text: span.text };
@@ -107,37 +149,57 @@ export function checkNarrative(facts, narrative) {
     }
     const sources = span.ids.filter((id) => byId.has(id));
     sources.forEach((id) => cited.add(id));
-    const support = supportOf(sources.map((id) => byId.get(id)), drugRe);
-    const claims = extractClaims(span.text, drugRe);
+    const support = sources.flatMap((id) => supportById.get(id));
+    const elsewhere = (match) => {
+      const ids = [...supportById].filter(([id, claims]) => !sources.includes(id) && claims.some(match)).map(([id]) => id);
+      return ids.length
+        ? ` It was entered in ${ids.join(', ')}, which this sentence doesn't cite.`
+        : ' Nothing entered matches it.';
+    };
 
-    for (const t of claims.times) {
-      if (!support.times.has(t)) {
-        errors.push({ ...at, message: `Time ${t.slice(0, 2)}:${t.slice(2)} isn't in the cited facts.${whereElse('times', t)}` });
-      }
+    const { claims, numberWords } = reader.read(span.text);
+
+    // An unsupported drug gets one error, not one per dose, route and time.
+    const badDrugs = new Set();
+    for (const c of claims.filter((c) => c.kind === 'drug')) {
+      const problem = verify(c, support, elsewhere);
+      if (problem && !badDrugs.has(c.drug)) errors.push({ ...at, message: problem });
+      if (problem) badDrugs.add(c.drug);
     }
-    for (const n of claims.numbers) {
-      if (support.numbers.has(n.value)) continue;
-      // "1432" written as a 24-hour time without the colon.
-      if (/^\d{4}$/.test(n.raw) && support.times.has(n.raw)) continue;
-      errors.push({ ...at, message: `The number ${n.raw} isn't in the cited facts.${whereElse('numbers', n.value)}` });
+    const mismatched = new Set();
+    for (const c of claims.filter((c) => c.kind !== 'drug')) {
+      if (badDrugs.has(c.drug) || badDrugs.has(c.subject)) continue;
+      const problem = verify(c, support, elsewhere);
+      if (!problem) continue;
+      errors.push({ ...at, message: problem });
+      if (c.kind === 'value') mismatched.add(c.subject);
+      if (c.drug) drugsWithErrors.add(c.drug);
     }
-    for (const d of claims.drugs) {
-      if (!support.drugs.has(d)) {
-        errors.push({ ...at, message: `The drug "${d}" isn't in the cited facts.${whereElse('drugs', d)}` });
-      }
-    }
-    // A cited vital whose value never shows up usually means the reading was
-    // swapped for a different one.
-    const spanNumbers = new Set(claims.numbers.map((n) => n.value));
+
+    // Every cited vital's reading has to be stated, so a cited reading can't
+    // be quietly replaced with another number.
     for (const id of sources) {
       const f = byId.get(id);
-      if (f.kind !== 'vital') continue;
-      const own = extractClaims(f.value ?? '', drugRe).numbers;
-      if (own.length && !own.some((n) => spanNumbers.has(n.value))) {
-        warnings.push({ ...at, message: `Cites ${id} but never states its value (${f.value}).` });
-      }
+      if (f.kind !== 'vital' || mismatched.has(f.type)) continue;
+      const readings = supportById.get(id).filter((s) => s.kind === 'value');
+      const stated = readings.every((r) => claims.some((c) => c.kind === 'value'
+        && (c.subject === r.subject || c.subject === null) && sameValue(r.subject, r.value, c.value)));
+      if (!stated) errors.push({ ...at, message: `Cites ${id} (${name(f.type)} ${f.value}) but doesn't state that reading.` });
     }
-    for (const w of claims.numberWords) {
+
+    for (const id of sources) {
+      const f = byId.get(id);
+      if (f.kind !== 'med') continue;
+      const drug = canonicalDrug(f.drug ?? '');
+      const own = supportById.get(id);
+      const doseOk = own.filter((s) => s.kind === 'dose').every((s) =>
+        claims.some((c) => c.kind === 'dose' && c.drug === drug && c.value === s.value && c.unit === s.unit));
+      const routeOk = own.filter((s) => s.kind === 'route').every((s) =>
+        claims.some((c) => c.kind === 'route' && c.drug === drug && c.route === s.route));
+      if (doseOk && routeOk) medsStated.add(id);
+    }
+
+    for (const w of numberWords) {
       warnings.push({ ...at, message: `"${w}" is a spelled-out number, which can't be checked. Write numbers as digits.` });
     }
   });
@@ -145,6 +207,8 @@ export function checkNarrative(facts, narrative) {
   for (const f of facts) {
     if (!cited.has(f.id)) {
       warnings.push({ span: null, text: null, message: `${f.id} (${factText(f)}) was entered but the narrative never cites it.` });
+    } else if (f.kind === 'med' && !medsStated.has(f.id) && !drugsWithErrors.has(canonicalDrug(f.drug ?? ''))) {
+      warnings.push({ span: null, text: null, message: `${f.id} (${factText(f)}) is cited but never stated with its dose, unit and route.` });
     }
   }
 

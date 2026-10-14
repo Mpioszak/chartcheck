@@ -45,7 +45,7 @@ export const DRUG_ALIASES = {
   'normal saline': 'normal saline',
   olanzapine: 'olanzapine', zyprexa: 'olanzapine',
   ondansetron: 'ondansetron', zofran: 'ondansetron',
-  oxygen: 'oxygen',
+  oxygen: 'oxygen', o2: 'oxygen',
   promethazine: 'promethazine', phenergan: 'promethazine',
   rocuronium: 'rocuronium',
   'sodium bicarbonate': 'sodium bicarbonate', bicarb: 'sodium bicarbonate',
