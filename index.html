@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>chartcheck</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>chartcheck</h1>
+    <p class="tag">Enter the facts. Every claim in the narrative has to trace back to one.</p>
+    <p class="banner">Demo only. Do not enter real patient information. Everything stays in this browser.</p>
+    <div class="toolbar">
+      <button id="load-sample">Load sample call</button>
+      <button id="export">Export JSON</button>
+      <label class="button">Import JSON <input id="import" type="file" accept="application/json" hidden></label>
+      <button id="clear" class="danger">Clear all</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="facts-section">
+      <h2>1. Facts</h2>
+      <form id="add-fact">
+        <label>Kind <select id="kind"></select></label>
+        <div id="fields"></div>
+        <button type="submit">Add fact</button>
+      </form>
+      <p id="add-error" class="error" hidden></p>
+      <table id="facts">
+        <thead><tr><th>ID</th><th>Kind</th><th>Time</th><th>Fact</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section id="gaps-section">
+      <h2>2. What's missing</h2>
+      <ul id="gaps" class="findings"></ul>
+    </section>
+
+    <section id="narrative-section">
+      <h2>3. Narrative check</h2>
+      <p class="hint">End each sentence with the ids it came from, like <code>[f3, f8]</code>. Any time, number or drug name that isn't in those facts is rejected.</p>
+      <textarea id="narrative" rows="12" spellcheck="false"></textarea>
+      <button id="check">Check narrative</button>
+      <div id="verdict"></div>
+      <ul id="check-errors" class="findings"></ul>
+      <ul id="check-warnings" class="findings"></ul>
+    </section>
+  </main>
+
+  <script type="module" src="src/app.js"></script>
+</body>
+</html>
