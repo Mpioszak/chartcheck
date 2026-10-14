@@ -4,15 +4,23 @@
 
 import { MILESTONES, MILESTONE_LABELS, parseTime, validateFact } from './schema.js';
 
-// Minutes since dispatch, so a call that crosses midnight still sorts.
-function clock(facts) {
+function dispatchTime(facts) {
   const dispatched = facts.find((f) => f.kind === 'milestone' && f.milestone === 'dispatched')
     ?? facts.find((f) => f.kind === 'dispatch');
-  const origin = parseTime(dispatched?.time);
+  return parseTime(dispatched?.time) === null ? null : dispatched.time;
+}
+
+// Minutes since dispatch, so a call that crosses midnight still sorts. A call
+// lasts well under 12 hours, so a time more than 12 hours "after" dispatch is
+// really before it, and comes back negative.
+function clock(origin) {
+  const o = parseTime(origin);
   return (time) => {
     const t = parseTime(time);
     if (t === null) return null;
-    return origin === null ? t : (t - origin + 1440) % 1440;
+    if (o === null) return t;
+    const since = (t - o + 1440) % 1440;
+    return since > 720 ? since - 1440 : since;
   };
 }
 
@@ -23,7 +31,8 @@ function medName(med) {
 export function findGaps(facts) {
   const gaps = [];
   const add = (severity, message, ...factIds) => gaps.push({ severity, message, factIds });
-  const at = clock(facts);
+  const dispatched = dispatchTime(facts);
+  const at = clock(dispatched);
   const of = (kind) => facts.filter((f) => f.kind === kind);
 
   for (const f of facts) {
@@ -53,6 +62,16 @@ export function findGaps(facts) {
       add('error',
         `Times are out of order: ${MILESTONE_LABELS[cur.milestone]} (${cur.time}) is before ${MILESTONE_LABELS[prev.milestone]} (${prev.time}).`,
         prev.id, cur.id);
+    }
+  }
+
+  // Anything else timed before dispatch is either a wrong time or something
+  // that happened before EMS arrived, which the narrative should say.
+  if (dispatched !== null) {
+    for (const f of facts) {
+      const t = at(f.time);
+      if (f.kind === 'milestone' || f.kind === 'dispatch' || t === null || t >= 0) continue;
+      add('warning', `${f.id} is timed ${f.time}, before the call was dispatched (${dispatched}). Check the time, or say in the narrative that it happened before EMS arrived.`, f.id);
     }
   }
 
