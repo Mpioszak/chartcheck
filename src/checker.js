@@ -6,15 +6,15 @@
 //
 //   1. reads its values as claims (see claims.js), each tied to what it
 //      describes: a reading to its vital, a dose and route to their drug, a
-//      time to the vital, drug or milestone it's written with;
+//      time to the vital, drug, milestone or chief complaint it's written with;
 //   2. looks for an entered fact that says the same thing about the same
 //      subject, and labels the sentence with every fact it finds;
 //   3. flags the sentence if any claim matches no fact, or if claims written
 //      together ("BP 158/94 at 14:30", "fentanyl 50 mcg IV") only match when
 //      taken from different facts;
 //   4. matches the wording against facts entered as free text (dispatch
-//      reason, findings, procedures, responses, transport, necessity,
-//      patient notes), for sentences with values or without;
+//      reason, chief complaint, findings, procedures, responses, transport,
+//      necessity, patient notes), for sentences with values or without;
 //   5. flags the sentence if nothing in it matches any fact.
 //
 // Values are never pooled: a reading only matches a fact for the same vital,
@@ -171,7 +171,7 @@ function contentWords(text) {
 
 // The free-text part of a fact, if it has one worth matching on.
 function freeText(fact) {
-  return ['dispatch', 'finding', 'procedure', 'transport', 'necessity', 'response', 'patient'].includes(fact.kind)
+  return ['dispatch', 'complaint', 'finding', 'procedure', 'transport', 'necessity', 'response', 'patient'].includes(fact.kind)
     ? [fact.name, fact.destination, fact.text].filter(Boolean).join(' ')
     : '';
 }

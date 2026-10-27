@@ -11,6 +11,8 @@ const base = [
   { id: 'f1', kind: 'patient', age: '50', sex: 'female' },
   { id: 'f2', kind: 'dispatch', time: '10:00', text: 'fall' },
   { id: 'f3', kind: 'finding', time: '10:10', text: 'on floor' },
+  // Numbered out of the way of the f4, f5, ... that the tests below add.
+  { id: 'f9', kind: 'complaint', time: '10:10', text: 'right hip pain' },
 ];
 // Shorthand: each finding as "severity: message".
 const msgs = (facts) => findGaps(facts).map((g) => `${g.severity}: ${g.message}`);
@@ -79,9 +81,31 @@ test('a med just before midnight and its response just after are in order', () =
     { id: 'f1', kind: 'patient', age: '50', sex: 'female' },
     { id: 'f2', kind: 'dispatch', time: '23:40', text: 'fall' },
     { id: 'f3', kind: 'finding', time: '23:50', text: 'on floor' },
+    { id: 'f9', kind: 'complaint', time: '23:50', text: 'right hip pain' },
     { id: 'f4', kind: 'med', time: '23:55', drug: 'fentanyl', dose: '50', unit: 'mcg', route: 'IV' },
     { id: 'f5', kind: 'response', time: '00:05', to: 'f4', text: 'pain 8 to 4' },
     { id: 'f6', kind: 'vital', time: '00:05', type: 'bp', value: '120/80' },
+  ]);
+  assert.deepEqual(out, []);
+});
+
+test('flags a report with no chief complaint', () => {
+  const out = msgs(base.filter((f) => f.kind !== 'complaint'));
+  assert.deepEqual(out, ['warning: No chief complaint entered (what the patient says is wrong).']);
+});
+
+test('flags a chief complaint timed before patient contact', () => {
+  const out = msgs([...base.filter((f) => f.kind !== 'complaint'),
+    { id: 'f4', kind: 'milestone', time: '10:08', milestone: 'patientcontact' },
+    { id: 'f5', kind: 'complaint', time: '10:05', text: 'right hip pain' },
+  ]);
+  assert.deepEqual(out, ['warning: The chief complaint (10:05) is timed before patient contact (10:08). Check the time.']);
+});
+
+test('a chief complaint at or after patient contact is fine', () => {
+  const out = msgs([...base.filter((f) => f.kind !== 'complaint'),
+    { id: 'f4', kind: 'milestone', time: '10:08', milestone: 'patientcontact' },
+    { id: 'f5', kind: 'complaint', time: '10:08', text: 'right hip pain' },
   ]);
   assert.deepEqual(out, []);
 });

@@ -53,6 +53,7 @@ export function findGaps(facts) {
   const patient = of('patient');
   if (!patient.length) add('warning', 'No patient age or sex entered.');
   if (!of('dispatch').length) add('warning', 'No dispatch reason entered (what the call came in as).');
+  if (!of('complaint').length) add('warning', 'No chief complaint entered (what the patient says is wrong).');
   if (!of('finding').length) add('warning', 'No findings entered (what you found on arrival).');
 
   // Call times in order. First, each milestone should be entered once. Then,
@@ -75,6 +76,16 @@ export function findGaps(facts) {
       add('error',
         `Times are out of order: ${MILESTONE_LABELS[cur.milestone]} (${cur.time}) is before ${MILESTONE_LABELS[prev.milestone]} (${prev.time}).`,
         prev.id, cur.id);
+    }
+  }
+
+  // The chief complaint comes from the patient, so it can't be taken before
+  // patient contact. A warning, because the time may simply be when the
+  // complaint started rather than when it was taken.
+  const contact = seen.get('patientcontact');
+  for (const c of of('complaint')) {
+    if (contact && at(c.time) !== null && at(c.time) < at(contact.time)) {
+      add('warning', `The chief complaint (${c.time}) is timed before patient contact (${contact.time}). Check the time.`, contact.id, c.id);
     }
   }
 

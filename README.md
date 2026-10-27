@@ -57,11 +57,11 @@ The checker splits the narrative into sentences, reads each value together with 
 - Nothing in it matches an entered fact ("Patient was alert and oriented.").
 - A reading doesn't match any entered reading of the vital it's labelled as. `BP 104/93, HR 158` fails even when 104 and 158 were both entered somewhere, and `158/94` is one value, so half of it can't be reused.
 - A dose doesn't match an entered dose of its drug in the same unit, or a route doesn't match its drug's route. `0.4 mcg` fails against `0.4 mg`, and so does `0.4` with no unit.
-- A time doesn't match the entered time of the vital, drug or call milestone it's written with.
+- A time doesn't match the entered time of the vital, drug, call milestone or chief complaint it's written with ("chief complaint", "complaining of", "c/o" tie a time to the chief complaint).
 - Values written together only match when taken from different entries. `BP 158/94 at 14:30` fails when 158/94 was taken at 14:15 and a different BP at 14:30, and `fentanyl 50 mcg IV` fails when 50 mcg was given IN and a later 25 mcg IV.
 - A drug, or a number not tied to anything, isn't in the entered facts.
 
-Sentences with no values ("A 12-lead ECG showed ST elevation in II, III and aVF.") are matched by wording against facts entered as free text: findings, procedures, transport, dispatch reason, responses, patient notes and the necessity statement. Those labels are drawn dashed, because the words themselves aren't verified. Vitals, meds and call times are never matched by wording, so "Blood pressure was stable." is flagged rather than matched to a BP entry.
+Sentences with no values ("A 12-lead ECG showed ST elevation in II, III and aVF.") are matched by wording against facts entered as free text: chief complaint, findings, procedures, transport, dispatch reason, responses, patient notes and the necessity statement. Those labels are drawn dashed, because the words themselves aren't verified. Vitals, meds and call times are never matched by wording, so "Blood pressure was stable." is flagged rather than matched to a BP entry.
 
 It **warns** when a number is spelled out ("two") because words can't be checked, when an entered fact matches no sentence, and when a med is mentioned but never stated with its dose, unit and route. Old-style tags like `[f3, f8]` are ignored, with a warning.
 
@@ -79,14 +79,15 @@ Deleting a med that has a recorded response asks first. The response is kept and
 - A response timed before its med.
 - Call times out of order (dispatched, en route, on scene, patient contact, departed, at destination, transferred), including any before dispatch. Calls that cross midnight are handled: a time up to 12 hours after dispatch counts as later, and anything more counts as earlier.
 - Any other fact timed before dispatch. This is a warning, because a med the patient took before EMS arrived is possible.
+- A chief complaint timed before patient contact. Also a warning, since the time may be when the complaint began.
 - A transport with no medical-necessity statement, or a very short one.
 - Only one set of vitals on a transported patient.
-- Missing patient age and sex, dispatch reason or findings, and any fact with a missing required field or a bad time.
+- Missing patient age and sex, dispatch reason, chief complaint or findings, and any fact with a missing required field or a bad time.
 
 ### What it doesn't catch yet
 
 - **Invented words inside a matched sentence.** Only values and drug names are checked. A sentence that matches the findings could still add "alert and oriented" when nobody entered mental status. This is the next thing to close.
-- A time in a clause that names no vital, drug or milestone (`At 14:20, ...`) is only checked against the times of all entered facts, not tied to one event.
+- A time in a clause that names no vital, drug, milestone or chief complaint (`At 14:20, ...`) is only checked against the times of all entered facts, not tied to one event.
 - Two values of the same vital in one clause with two times (`pain 8/10 at 14:13 to 5/10 at 14:25`) are each checked against an entry at one of those times, so swapping the two times isn't caught.
 - Wording matches can be loose: a sentence that shares a few words with a free-text fact is labelled with it.
 - Drugs not in `src/drugs.js` and not entered by the medic won't be recognised as drugs.
