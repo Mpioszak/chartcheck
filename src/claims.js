@@ -4,7 +4,8 @@
 //   value  a reading tied to its vital sign ("BP 158/94"), or to nothing
 //   dose   a dose and unit tied to its drug ("nitroglycerin 0.4 mg")
 //   route  a route tied to its drug ("nitroglycerin ... SL")
-//   time   a time tied to the vital, drug or call milestone it belongs to
+//   time   a time tied to the vital, drug, call milestone or chief complaint
+//          it belongs to
 //   drug   a drug name
 //
 // The narrative and the free-text parts of facts are read the same way, so
@@ -48,6 +49,11 @@ const MILESTONE_WORDS = {
   atdestination: ['arrived at hospital', 'arrived at the hospital', 'arrived at destination', 'arrived at the destination', 'arrival at hospital', 'arrival at the hospital', 'arrival at destination', 'arrival at the destination'],
   transfer: ['transferred care', 'care was transferred', 'care transferred', 'transfer of care', 'report given', 'gave report'],
 };
+
+// Phrases that introduce the chief complaint. A time written with one of
+// these ("complaining of chest pain since 14:13") belongs to the chief
+// complaint entry, the same way a time belongs to a milestone.
+const COMPLAINT_WORDS = ['chief complaint', 'complaining of', 'complained of', 'complains of', 'c/o'];
 
 // Ways each route can be written.
 const ROUTE_WORDS = {
@@ -114,6 +120,7 @@ const VITALS = new Set(VITAL_TYPES);
 export const SUBJECT_NAMES = {
   bp: 'BP', hr: 'HR', rr: 'RR', spo2: 'SpO2', etco2: 'EtCO2', gcs: 'GCS',
   bgl: 'blood glucose', temp: 'temperature', pain: 'pain', age: 'age', duration: 'duration',
+  complaint: 'chief complaint',
   ...MILESTONE_LABELS,
 };
 
@@ -207,6 +214,8 @@ export function makeReader(enteredDrugs = []) {
   for (const [milestone, spellings] of Object.entries(MILESTONE_WORDS)) {
     for (const s of spellings) phrases.set(s, { type: 'milestone', subject: milestone });
   }
+  // The chief complaint ties times to itself just as a milestone does.
+  for (const s of COMPLAINT_WORDS) phrases.set(s, { type: 'milestone', subject: 'complaint' });
   for (const [subject, spellings] of Object.entries(VITAL_WORDS)) {
     for (const s of spellings) phrases.set(s, { type: 'label', subject });
   }
@@ -416,6 +425,9 @@ export function factClaims(fact, reader, byId) {
     case 'dispatch':
       if (time) add({ kind: 'time', subject: 'dispatched', time });
       break;
+    case 'complaint':
+      if (time) add({ kind: 'time', subject: 'complaint', time });
+      break;
     case 'milestone':
       if (time) add({ kind: 'time', subject: fact.milestone, time });
       break;
@@ -444,7 +456,8 @@ export function factClaims(fact, reader, byId) {
       break;
   }
 
-  // Claims from the free-text parts (procedure name, destination, notes),
+  // Claims from the free-text parts (procedure name, destination, notes,
+  // what the chief complaint is described as),
   // read the same way as the narrative.
   const text = [fact.name, fact.destination, fact.text].filter(Boolean).join('. ');
   if (text) {

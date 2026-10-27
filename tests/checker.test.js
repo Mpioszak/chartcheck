@@ -22,6 +22,7 @@ const facts = [
   { id: 'f11', kind: 'med', time: '14:22', drug: 'fentanyl', dose: '50', unit: 'mcg', route: 'IN' },
   { id: 'f12', kind: 'med', time: '14:35', drug: 'fentanyl', dose: '25', unit: 'mcg', route: 'IV' },
   { id: 'f13', kind: 'procedure', time: '14:16', name: '12-lead ECG', text: 'ST elevation in II, III and aVF' },
+  { id: 'f14', kind: 'complaint', time: '14:13', text: 'crushing chest pain radiating to the left arm' },
 ];
 
 // Shorthands: the error messages for a narrative, the facts each sentence was
@@ -178,6 +179,18 @@ test('warns on spelled-out numbers, unused facts and meds never stated in full',
   assert.match(w, /"two"/);
   assert.match(w, /f1 .*no sentence matches it/);
   assert.match(w, /f3 .*never stated with its dose, unit and route/);
+});
+
+test('a chief complaint is matched by its wording and its time', () => {
+  assert.deepEqual(labels('Patient complained of crushing chest pain radiating to the left arm.'), [['f14']]);
+  assert.deepEqual(errors('Chief complaint at 14:13 was crushing chest pain radiating to the left arm.'), []);
+  assert.deepEqual(labels('Chief complaint at 14:13 was crushing chest pain radiating to the left arm.'), [['f14']]);
+});
+
+test('flags a chief complaint given the wrong time', () => {
+  assert.deepEqual(errors('Chief complaint at 14:10 was crushing chest pain radiating to the left arm.'), [
+    '14:10 is given for chief complaint, but the entered time is 14:13 (f14).',
+  ]);
 });
 
 test('splitSentences splits at sentence ends but not abbreviations or decimals', () => {

@@ -53,6 +53,7 @@ export const ROUTES = ['PO', 'SL', 'IV', 'IO', 'IM', 'IN', 'NEB', 'NC', 'NRB', '
 export const KINDS = {
   patient: { label: 'Patient', fields: { age: ['Age', 'text', true], sex: ['Sex', 'text', true], text: ['Notes', 'text', false] } },
   dispatch: { label: 'Dispatch', fields: { time: ['Time', 'time', true], text: ['Dispatched as', 'text', true] } },
+  complaint: { label: 'Patient Chief Complaint', fields: { time: ['Time', 'time', true], text: ['Described as', 'text', true] } },
   milestone: { label: 'Call time', fields: { time: ['Time', 'time', true], milestone: ['Milestone', 'milestone', true] } },
   finding: { label: 'Finding', fields: { time: ['Time', 'time', false], text: ['What you found', 'text', true] } },
   vital: { label: 'Vital sign', fields: { time: ['Time', 'time', true], type: ['Type', 'vitaltype', true], value: ['Value', 'text', true] } },

@@ -26,6 +26,7 @@ export const SAMPLE_FACTS = [
   { id: 'f19', kind: 'milestone', time: '14:38', milestone: 'atdestination' },
   { id: 'f20', kind: 'milestone', time: '14:42', milestone: 'transfer' },
   { id: 'f21', kind: 'necessity', text: 'Suspected inferior STEMI requiring continuous cardiac monitoring, ALS interventions en route and direct cath lab activation; private transport would delay definitive care.' },
+  { id: 'f22', kind: 'complaint', time: '14:13', text: 'crushing substernal chest pain radiating to the left arm' },
 ];
 
 // The narrative an AI might write from those facts, as plain sentences. The
