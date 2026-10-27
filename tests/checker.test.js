@@ -211,3 +211,35 @@ test('the sample narrative flags exactly the sentences with planted mistakes', (
   ]);
   assert.ok(r.sentences.filter((s) => s.ok).every((s) => s.ids.length));
 });
+
+test('marks a sentence that leaves out words of a free-text fact it matches', () => {
+  const r = check('Chief complaint of chest pain.');
+  assert.deepEqual(r.sentences[0].ids, ['f14']);
+  assert.equal(r.sentences[0].ok, true);
+  assert.deepEqual(r.sentences[0].missing, [{ id: 'f14', words: ['crushing', 'radiating', 'left', 'arm'] }]);
+  assert.deepEqual(r.errors, []);
+});
+
+test('a sentence with all of the fact\'s words is not marked', () => {
+  const r = check('Complaining of crushing chest pain radiating to his left arm. '
+    + 'A 12-lead ECG showed ST elevation in leads II, III and aVF.');
+  assert.deepEqual(r.sentences.map((s) => s.missing), [[], []]);
+});
+
+test('missing words ignore case, punctuation, plurals and filler words, but not short words', () => {
+  const custom = [
+    { id: 'f1', kind: 'finding', text: 'No JVD, the rib is tender' },
+    { id: 'f2', kind: 'procedure', time: '14:16', name: '12-lead ECG', text: 'no ST elevation' },
+  ];
+  const missing = (n) => checkNarrative(custom, n).sentences.map((s) => s.missing);
+  assert.deepEqual(missing('no jvd; ribs were tender.'), [[]]);
+  assert.deepEqual(missing('JVD absent and ribs tender.'), [[{ id: 'f1', words: ['No'] }]]);
+  assert.deepEqual(missing('A 12-lead showed ST elevation.'), [[{ id: 'f2', words: ['ECG', 'no'] }]]);
+});
+
+test('only free-text facts are checked for missing words', () => {
+  // f3 is matched by its dose and route; a med has no free text to leave out.
+  const r = check('Gave nitro 0.4 mg SL.');
+  assert.deepEqual(r.sentences[0].ids, ['f3']);
+  assert.deepEqual(r.sentences[0].missing, []);
+});

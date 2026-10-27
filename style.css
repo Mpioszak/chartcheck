@@ -77,7 +77,7 @@ select:disabled { opacity: 0.7; }
 .findings li { padding: 8px 12px; border-radius: 6px; margin-bottom: 6px; }
 .findings q { font-style: italic; display: block; color: var(--muted); }
 li.error, p.error { background: var(--error-bg); color: var(--error); }
-li.warning { background: var(--warning-bg); color: var(--warning); }
+li.warning, p.warning { background: var(--warning-bg); color: var(--warning); }
 li.ok, p.ok { background: var(--ok-bg); color: var(--ok); }
 /* Each checked sentence, with its fact ids as small labels after it. */
 h3 { font-size: 1rem; margin: 16px 0 4px; }
@@ -90,7 +90,7 @@ h3 { font-size: 1rem; margin: 16px 0 4px; }
 .chip.words { border-style: dashed; }
 .chip.none { font-family: inherit; }
 .problem { margin-top: 4px; }
-p.error, p.ok { padding: 8px 12px; border-radius: 6px; font-weight: 600; }
+p.error, p.warning, p.ok { padding: 8px 12px; border-radius: 6px; font-weight: 600; }
 .muted { color: var(--muted); }
 .hint { color: var(--muted); font-size: 0.9rem; }
 code { font-family: ui-monospace, Menlo, monospace; }

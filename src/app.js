@@ -5,7 +5,8 @@
 //                       with an Edit and a Delete button on each row
 //   2. What's missing   the gap finder's results (gaps.js), refreshed on every change
 //   3. Narrative check  a text box for the narrative, and each sentence with the
-//                       facts it was matched to, or why it was flagged (checker.js)
+//                       facts it was matched to, why it was flagged, or which
+//                       fact words it leaves out (checker.js)
 //
 // Nothing is sent anywhere. The facts and narrative are kept in the browser's
 // local storage so a page reload doesn't lose them, and can be exported to or
@@ -174,19 +175,26 @@ function renderGaps() {
 
 // Runs the fact checker on the narrative and shows each sentence with the
 // facts it was matched to. Sentences that match nothing, or say something the
-// facts don't support, are listed separately with the reason.
+// facts don't support, are listed separately (red) with the reason; so are
+// sentences that leave out words of a free-text fact they match (yellow).
 function runCheck() {
   checkShown = true;
   state.narrative = $('#narrative').value;
   save();
   const result = checkNarrative(state.facts, state.narrative);
-  const matched = result.sentences.filter((s) => s.ok);
   const flagged = result.sentences.filter((s) => !s.ok);
+  const partial = result.sentences.filter((s) => s.ok && s.missing.length);
+  const matched = result.sentences.filter((s) => s.ok && !s.missing.length);
   const total = result.sentences.length;
+  const plural = (n) => `${n} of ${total} sentence${total === 1 ? '' : 's'}`;
   $('#verdict').replaceChildren(!total ? '' : flagged.length
-    ? el('p', { class: 'error' }, `${flagged.length} of ${total} sentence${total === 1 ? '' : 's'} flagged.`)
-    : el('p', { class: 'ok' }, `All ${total} sentence${total === 1 ? '' : 's'} matched to entered facts.`));
+    ? el('p', { class: 'error' }, `${plural(flagged.length)} flagged.`
+      + (partial.length ? ` ${partial.length} more leave${partial.length === 1 ? 's' : ''} out words of a fact.` : ''))
+    : partial.length
+      ? el('p', { class: 'warning' }, `${plural(partial.length)} leave out words of a fact they match.`)
+      : el('p', { class: 'ok' }, `All ${total} sentence${total === 1 ? '' : 's'} matched to entered facts.`));
   renderSentences($('#flagged'), flagged, 'Flagged sentences');
+  renderSentences($('#partial'), partial, 'Sentences missing fact words');
   renderSentences($('#matched'), matched, 'Matched sentences');
   renderFindings($('#check-warnings'), result.warnings, 'warning');
 }
@@ -201,18 +209,21 @@ function factChip(id, wordOnly) {
   }, id);
 }
 
-// Fills one of the two sentence lists: the sentence, its fact labels, and
-// for a flagged sentence what's wrong with it.
+// Fills one of the three sentence lists: the sentence, its fact labels, what's
+// wrong with a flagged sentence, and which fact words a sentence leaves out.
 function renderSentences(box, sentences, heading) {
   if (!sentences.length) return box.replaceChildren();
+  const cls = (s) => (!s.ok ? 'error' : s.missing.length ? 'warning' : 'ok');
   box.replaceChildren(
     el('h3', {}, `${heading} (${sentences.length})`),
-    el('ul', { class: 'findings' }, ...sentences.map((s) => el('li', { class: s.ok ? 'ok' : 'error' },
+    el('ul', { class: 'findings' }, ...sentences.map((s) => el('li', { class: cls(s) },
       el('span', { class: 'sentence' }, s.text),
       el('span', { class: 'chips' }, ...(s.ids.length
         ? s.ids.map((id) => factChip(id, s.wordOnly.includes(id)))
         : [el('span', { class: 'chip none' }, 'no fact found')])),
       ...s.problems.map((p) => el('div', { class: 'problem' }, p)),
+      ...s.missing.map((m) => el('div', { class: 'problem' },
+        `Leaves out words of ${m.id}: ${m.words.map((w) => `"${w}"`).join(', ')}.`)),
     ))),
   );
 }
@@ -328,7 +339,7 @@ $('#clear').addEventListener('click', () => {
   showError();
   save();
   render();
-  for (const id of ['#verdict', '#flagged', '#matched', '#check-warnings']) $(id).replaceChildren();
+  for (const id of ['#verdict', '#flagged', '#partial', '#matched', '#check-warnings']) $(id).replaceChildren();
 });
 
 // "Export JSON": download the facts, narrative and last id as a file.

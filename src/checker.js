@@ -15,7 +15,9 @@
 //   4. matches the wording against facts entered as free text (dispatch
 //      reason, chief complaint, findings, procedures, responses, transport,
 //      necessity, patient notes), for sentences with values or without;
-//   5. flags the sentence if nothing in it matches any fact.
+//   5. flags the sentence if nothing in it matches any fact;
+//   6. marks the sentence yellow if it's matched to a free-text fact but
+//      leaves out some of that fact's words, and says which ones.
 //
 // Values are never pooled: a reading only matches a fact for the same vital,
 // a dose only a fact for the same drug with the same unit.
@@ -191,6 +193,39 @@ function wordMatches(sentence, wordsById) {
   return ids;
 }
 
+// ---- Fact words a sentence leaves out ----
+//
+// A sentence matched to a free-text fact should carry all of that fact's
+// words. If the fact says "crushing chest pain radiating to the left arm" and
+// the sentence only says "chest pain", the sentence is marked yellow and the
+// missing words ("crushing", "radiating", "left", "arm") are listed. This is
+// stricter than the matching above: short words count, so "no", "not", "ECG"
+// and "IV" can't quietly drop out. Ignored: case, punctuation, a trailing
+// "'s" or plural "s" (so "ribs" and "rib" are the same word), and the filler
+// words below, which a sentence can reword without changing what it says.
+// Times, decimals and scores ("15:10", "0.4", "8/10") count as one word.
+const FILLER_WORDS = new Set(`
+  a an the and or of to at in on for by from with as into onto
+  is are was were be been being has had have it its this that
+  pt patient`.split(/\s+/).filter(Boolean));
+
+// Every word in some text, as a map from its plain form to how it was first
+// written ("ribs" -> "ribs", keyed "rib"), leaving out filler words.
+function allWords(text) {
+  const words = new Map();
+  for (const w of String(text).match(/[a-z0-9]+(?:[:./'][a-z0-9]+)*/gi) ?? []) {
+    const key = w.toLowerCase().replace(/'s$/, '').replace(/(?<=[a-z]{3})s$/, '');
+    if (!FILLER_WORDS.has(key) && !words.has(key)) words.set(key, w);
+  }
+  return words;
+}
+
+// The words of fact f's free text that the sentence doesn't use.
+function missingWords(sentence, fact) {
+  const said = allWords(sentence);
+  return [...allWords(freeText(fact))].filter(([key]) => !said.has(key)).map(([, w]) => w);
+}
+
 // The main check. Returns { ok, sentences, errors, warnings }.
 //
 // sentences: one entry per sentence, in order:
@@ -198,6 +233,8 @@ function wordMatches(sentence, wordsById) {
 //   ids       the facts the sentence was matched to, in entry order
 //   wordOnly  the subset of ids matched only by wording, not by a value
 //   problems  why the sentence is flagged; empty when it's fine
+//   missing   free-text facts the sentence is matched to but leaves words
+//             out of, as { id, words }; empty when none
 // errors: every problem, as { sentence, text, message }.
 // warnings: things worth a second look (an entered fact no sentence uses, a
 // spelled-out number), as { sentence, text, message }.
@@ -339,7 +376,10 @@ export function checkNarrative(facts, narrative) {
     }
 
     const sorted = (xs) => [...xs].sort((a, b) => order.get(a) - order.get(b));
-    return { text, ids: sorted(ids), wordOnly: sorted(wordOnly), problems, ok: problems.length === 0 };
+    const missing = sorted(ids).filter((id) => freeText(byId.get(id)))
+      .map((id) => ({ id, words: missingWords(text, byId.get(id)) }))
+      .filter((m) => m.words.length);
+    return { text, ids: sorted(ids), wordOnly: sorted(wordOnly), problems, missing, ok: problems.length === 0 };
   });
 
   // After all sentences: warn about entered facts no sentence uses, and meds
