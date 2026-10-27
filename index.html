@@ -47,11 +47,12 @@
     <!-- 3. Paste or write the narrative, then check it against the facts. -->
     <section id="narrative-section">
       <h2>3. Narrative check</h2>
-      <p class="hint">Write ordinary sentences. Each one is matched to the facts it came from and labelled with their ids. A sentence is flagged if a value doesn't match the fact it belongs to (a reading its vital, a dose its drug, unit and route, a time its event) or if nothing in it matches an entered fact.</p>
+      <p class="hint">Write ordinary sentences. Each one is matched to the facts it came from and labelled with their ids. A sentence is flagged if a value doesn't match the fact it belongs to (a reading its vital, a dose its drug, unit and route, a time its event) or if nothing in it matches an entered fact. A sentence is marked yellow if it matches a free-text fact but leaves out some of that fact's words.</p>
       <textarea id="narrative" rows="12" spellcheck="false"></textarea>
       <button id="check">Check narrative</button>
       <div id="verdict"></div>
       <div id="flagged"></div>
+      <div id="partial"></div>
       <div id="matched"></div>
       <ul id="check-warnings" class="findings"></ul>
     </section>
