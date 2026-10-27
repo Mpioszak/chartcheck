@@ -8,6 +8,7 @@ The medic enters the call as discrete facts (vitals, meds, times, findings). The
 
 ## Try it
 
+https://mpioszak.github.io/chartcheck/
 Open the page and click **Load sample call**. The sample narrative has two planted mistakes (a repeat blood pressure nobody took and a drug that was never given) and the sample facts leave out the response to aspirin. All three get caught.
 
 ## Run locally
