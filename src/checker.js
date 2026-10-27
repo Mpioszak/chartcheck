@@ -193,12 +193,16 @@ function wordMatches(sentence, wordsById) {
   return ids;
 }
 
-// ---- Fact words a sentence leaves out ----
+// ---- Fact words the narrative leaves out ----
 //
-// A sentence matched to a free-text fact should carry all of that fact's
-// words. If the fact says "crushing chest pain radiating to the left arm" and
-// the sentence only says "chest pain", the sentence is marked yellow and the
-// missing words ("crushing", "radiating", "left", "arm") are listed. This is
+// The sentences matched to a free-text fact should, between them, carry all
+// of that fact's words. If the fact says "crushing chest pain radiating to the
+// left arm" and the only sentence matched to it says "chest pain", that
+// sentence is marked yellow and the missing words ("crushing", "radiating",
+// "left", "arm") are listed. A fact split over two sentences is fine as long
+// as every word turns up in one of them. If words are still missing, every
+// sentence matched to the fact is marked, since any of them could be where
+// the words belong. This is
 // stricter than the matching above: short words count, so "no", "not", "ECG"
 // and "IV" can't quietly drop out. Ignored: case, punctuation, a trailing
 // "'s" or plural "s" (so "ribs" and "rib" are the same word), and the filler
@@ -220,9 +224,9 @@ function allWords(text) {
   return words;
 }
 
-// The words of fact f's free text that the sentence doesn't use.
-function missingWords(sentence, fact) {
-  const said = allWords(sentence);
+// The words of fact f's free text that none of the given sentences use.
+function missingWords(sentences, fact) {
+  const said = new Set(sentences.flatMap((text) => [...allWords(text).keys()]));
   return [...allWords(freeText(fact))].filter(([key]) => !said.has(key)).map(([, w]) => w);
 }
 
@@ -233,8 +237,9 @@ function missingWords(sentence, fact) {
 //   ids       the facts the sentence was matched to, in entry order
 //   wordOnly  the subset of ids matched only by wording, not by a value
 //   problems  why the sentence is flagged; empty when it's fine
-//   missing   free-text facts the sentence is matched to but leaves words
-//             out of, as { id, words }; empty when none
+//   missing   free-text facts the sentence is matched to whose words the
+//             narrative leaves out, counting every sentence matched to the
+//             fact, as { id, words }; empty when none
 // errors: every problem, as { sentence, text, message }.
 // warnings: things worth a second look (an entered fact no sentence uses, a
 // spelled-out number), as { sentence, text, message }.
@@ -376,11 +381,19 @@ export function checkNarrative(facts, narrative) {
     }
 
     const sorted = (xs) => [...xs].sort((a, b) => order.get(a) - order.get(b));
-    const missing = sorted(ids).filter((id) => freeText(byId.get(id)))
-      .map((id) => ({ id, words: missingWords(text, byId.get(id)) }))
-      .filter((m) => m.words.length);
-    return { text, ids: sorted(ids), wordOnly: sorted(wordOnly), problems, missing, ok: problems.length === 0 };
+    return { text, ids: sorted(ids), wordOnly: sorted(wordOnly), problems, ok: problems.length === 0 };
   });
+
+  // Free-text facts whose words aren't all used by the sentences matched to
+  // them. Each of those sentences lists the words still missing.
+  const missingById = new Map();
+  for (const f of facts.filter((f) => freeText(f))) {
+    const words = missingWords(sentences.filter((s) => s.ids.includes(f.id)).map((s) => s.text), f);
+    if (words.length) missingById.set(f.id, words);
+  }
+  for (const s of sentences) {
+    s.missing = s.ids.filter((id) => missingById.has(id)).map((id) => ({ id, words: missingById.get(id) }));
+  }
 
   // After all sentences: warn about entered facts no sentence uses, and meds
   // that are used but never written out with dose, unit and route.

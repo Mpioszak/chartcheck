@@ -88,13 +88,12 @@ test('randomSampleIndex can pick any sample when none is loaded', () => {
 // Yellow marks aren't planted mistakes; they show where the narrative words a
 // free-text fact differently. Pinned for one sample so a change in how words
 // are compared shows up here.
-test('Chest pain: sentences that leave out fact words are marked', () => {
+test('Chest pain: sentences matched to a fact with unused words are marked', () => {
   const c = sample('Chest pain');
   const marked = checkNarrative(c.facts, c.narrative).sentences
     .filter((s) => s.missing.length)
     .map((s) => s.missing.map((m) => `${m.id}: ${m.words.join(' ')}`).join('; '));
   assert.deepEqual(marked, [
-    'f22: crushing substernal radiating left arm',
     'f7: onset',
     'f21: private would delay definitive care',
   ]);

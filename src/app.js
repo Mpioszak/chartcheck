@@ -6,7 +6,7 @@
 //   2. What's missing   the gap finder's results (gaps.js), refreshed on every change
 //   3. Narrative check  a text box for the narrative, and each sentence with the
 //                       facts it was matched to, why it was flagged, or which
-//                       fact words it leaves out (checker.js)
+//                       fact words no sentence uses (checker.js)
 //
 // Nothing is sent anywhere. The facts and narrative are kept in the browser's
 // local storage so a page reload doesn't lose them, and can be exported to or
@@ -176,7 +176,8 @@ function renderGaps() {
 // Runs the fact checker on the narrative and shows each sentence with the
 // facts it was matched to. Sentences that match nothing, or say something the
 // facts don't support, are listed separately (red) with the reason; so are
-// sentences that leave out words of a free-text fact they match (yellow).
+// sentences matched to a free-text fact whose words the narrative leaves out
+// (yellow).
 function runCheck() {
   checkShown = true;
   state.narrative = $('#narrative').value;
@@ -189,9 +190,9 @@ function runCheck() {
   const plural = (n) => `${n} of ${total} sentence${total === 1 ? '' : 's'}`;
   $('#verdict').replaceChildren(!total ? '' : flagged.length
     ? el('p', { class: 'error' }, `${plural(flagged.length)} flagged.`
-      + (partial.length ? ` ${partial.length} more leave${partial.length === 1 ? 's' : ''} out words of a fact.` : ''))
+      + (partial.length ? ` ${partial.length} more match${partial.length === 1 ? 'es' : ''} a fact whose words aren't all used.` : ''))
     : partial.length
-      ? el('p', { class: 'warning' }, `${plural(partial.length)} leave out words of a fact they match.`)
+      ? el('p', { class: 'warning' }, `${plural(partial.length)} match a fact whose words aren't all used.`)
       : el('p', { class: 'ok' }, `All ${total} sentence${total === 1 ? '' : 's'} matched to entered facts.`));
   renderSentences($('#flagged'), flagged, 'Flagged sentences');
   renderSentences($('#partial'), partial, 'Sentences missing fact words');
@@ -210,7 +211,7 @@ function factChip(id, wordOnly) {
 }
 
 // Fills one of the three sentence lists: the sentence, its fact labels, what's
-// wrong with a flagged sentence, and which fact words a sentence leaves out.
+// wrong with a flagged sentence, and which fact words no sentence uses.
 function renderSentences(box, sentences, heading) {
   if (!sentences.length) return box.replaceChildren();
   const cls = (s) => (!s.ok ? 'error' : s.missing.length ? 'warning' : 'ok');
@@ -223,7 +224,7 @@ function renderSentences(box, sentences, heading) {
         : [el('span', { class: 'chip none' }, 'no fact found')])),
       ...s.problems.map((p) => el('div', { class: 'problem' }, p)),
       ...s.missing.map((m) => el('div', { class: 'problem' },
-        `Leaves out words of ${m.id}: ${m.words.map((w) => `"${w}"`).join(', ')}.`)),
+        `No sentence matched to ${m.id} uses: ${m.words.map((w) => `"${w}"`).join(', ')}.`)),
     ))),
   );
 }
