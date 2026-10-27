@@ -2,6 +2,7 @@
 // logic in the other modules:
 //
 //   1. Facts            a form for entering facts, and a table listing them
+//                       with an Edit and a Delete button on each row
 //   2. What's missing   the gap finder's results (gaps.js), refreshed on every change
 //   3. Narrative check  a text box for the narrative, and each sentence with the
 //                       facts it was matched to, or why it was flagged (checker.js)
@@ -9,8 +10,13 @@
 // Nothing is sent anywhere. The facts and narrative are kept in the browser's
 // local storage so a page reload doesn't lose them, and can be exported to or
 // imported from a JSON file.
+//
+// Fact ids never change and are never reused (see nextFactId in schema.js), so
+// a label like "f12" always means the same entry. After a fact is edited or
+// deleted, the gap finder reruns, and so does the narrative check if its
+// results are on screen, so no label is left pointing at an old version.
 
-import { KINDS, MILESTONES, MILESTONE_LABELS, VITAL_TYPES, VITAL_LABELS, ROUTES, factText, nextFactId, validateFact } from './schema.js';
+import { KINDS, MILESTONES, MILESTONE_LABELS, VITAL_TYPES, VITAL_LABELS, ROUTES, dependentsOf, factText, idNumber, nextFactId, validateFact } from './schema.js';
 import { checkNarrative } from './checker.js';
 import { findGaps } from './gaps.js';
 import { SAMPLE_FACTS, SAMPLE_NARRATIVE } from './sample.js';
@@ -19,8 +25,17 @@ const STORAGE_KEY = 'chartcheck:v1';
 // Shorthand for finding one element on the page, e.g. $('#narrative').
 const $ = (sel) => document.querySelector(sel);
 
-// Everything the page knows: the list of facts and the narrative text.
+// Everything the page saves: the list of facts, the narrative text, and the
+// highest fact id number handed out so far (so deleted ids aren't reused).
 let state = load();
+
+// The id of the fact being edited in the form, or null when the form is
+// adding a new fact.
+let editingId = null;
+
+// Whether the narrative check's results are on screen, so they can be
+// refreshed when the facts change.
+let checkShown = false;
 
 // ---- Saving and loading ----
 
@@ -30,9 +45,15 @@ let state = load();
 function load() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
-    if (saved && Array.isArray(saved.facts)) return { facts: saved.facts, narrative: saved.narrative ?? '' };
+    if (saved && Array.isArray(saved.facts)) return report(saved);
   } catch { /* storage unavailable or corrupt */ }
-  return { facts: [], narrative: '' };
+  return report({});
+}
+
+// A report in the shape the page keeps, from a saved or imported copy. Older
+// copies have no lastId, so it starts from the highest id in their facts.
+function report({ facts = [], narrative = '', lastId = 0 }) {
+  return { facts, narrative, lastId: Math.max(Number(lastId) || 0, ...facts.map((f) => idNumber(f.id))) };
 }
 
 // Writes the current report to local storage. Failing to save is not fatal.
@@ -61,12 +82,18 @@ function options(values, labels = {}) {
   return values.map((v) => el('option', { value: v }, labels[v] ?? v));
 }
 
-// Builds the input box for one field of the fact form. The type comes from
-// the field list in schema.js: times get a text box that expects HH:MM, fixed
-// lists (milestones, vital types, routes) get a dropdown, and "medref" gets a
-// dropdown of the medications already entered, so a response can say which
-// med it was a response to.
-function fieldInput(name, type) {
+// Builds the input box for one field of the fact form, filled in with value
+// when editing. The type comes from the field list in schema.js: times get a
+// text box that expects HH:MM, fixed lists (milestones, vital types, routes)
+// get a dropdown, and "medref" gets a dropdown of the medications already
+// entered, so a response can say which med it was a response to.
+function fieldInput(name, type, value) {
+  const input = blankInput(name, type, value);
+  if (value != null) input.value = value;
+  return input;
+}
+
+function blankInput(name, type, value) {
   switch (type) {
     case 'time': return el('input', { name, type: 'text', placeholder: 'HH:MM', pattern: '([01]?\\d|2[0-3]):[0-5]\\d', inputmode: 'numeric' });
     case 'milestone': return el('select', { name }, ...options(MILESTONES, MILESTONE_LABELS));
@@ -74,7 +101,12 @@ function fieldInput(name, type) {
     case 'route': return el('select', { name }, ...options(ROUTES));
     case 'medref': {
       const meds = state.facts.filter((f) => f.kind === 'med');
-      return el('select', { name }, ...meds.map((m) => el('option', { value: m.id }, `${m.id}: ${m.drug} ${m.time}`)));
+      const select = el('select', { name }, ...meds.map((m) => el('option', { value: m.id }, `${m.id}: ${m.drug} ${m.time}`)));
+      // A response being edited whose med was deleted keeps pointing at it
+      // until the medic picks another, rather than silently switching to
+      // whichever med is listed first.
+      if (value && !meds.some((m) => m.id === value)) select.append(el('option', { value }, `${value}: not an entered medication`));
+      return select;
     }
     default: return el('input', { name, type: 'text' });
   }
@@ -84,30 +116,41 @@ function fieldInput(name, type) {
 
 // Redraws the form fields for whichever kind of fact is picked in the
 // "Kind" dropdown (a vital needs time, type and value; a med needs drug,
-// dose, unit and route; and so on).
+// dose, unit and route; and so on). When a fact is being edited, the form
+// shows that fact's kind and values, the kind can't be changed, and the
+// buttons read "Save changes" and "Cancel".
 function renderFields() {
+  const editing = state.facts.find((f) => f.id === editingId);
+  if (editing) $('#kind').value = editing.kind;
+  $('#kind').disabled = Boolean(editing);
+  $('#submit-fact').textContent = editing ? `Save changes to ${editing.id}` : 'Add fact';
+  $('#cancel-edit').hidden = !editing;
   const spec = KINDS[$('#kind').value];
   const box = $('#fields');
   box.replaceChildren();
   for (const [name, [label, type, required]] of Object.entries(spec.fields)) {
-    box.append(el('label', {}, `${label}${required ? '' : ' (optional)'} `, fieldInput(name, type)));
+    box.append(el('label', {}, `${label}${required ? '' : ' (optional)'} `, fieldInput(name, type, editing?.[name])));
   }
 }
 
 // Redraws the table of entered facts. A fact with a problem (a missing
 // required field, a bad time) is highlighted, with the problem shown on hover.
+// The row being edited is highlighted too.
 function renderFacts() {
   const body = $('#facts tbody');
   body.replaceChildren();
   for (const f of state.facts) {
     const { time, ...rest } = f;
     const problems = validateFact(f);
-    body.append(el('tr', problems.length ? { class: 'invalid', title: problems.join('; ') } : {},
+    const cls = [problems.length ? 'invalid' : '', f.id === editingId ? 'editing' : ''].filter(Boolean).join(' ');
+    body.append(el('tr', { class: cls, ...(problems.length ? { title: problems.join('; ') } : {}) },
       el('td', {}, f.id),
       el('td', {}, KINDS[f.kind]?.label ?? f.kind),
       el('td', {}, time ?? ''),
       el('td', {}, factText(rest) + (f.to ? ` (re ${f.to})` : '')),
-      el('td', {}, el('button', { class: 'small', onclick: () => removeFact(f.id) }, 'Delete')),
+      el('td', { class: 'actions' },
+        el('button', { class: 'small', type: 'button', onclick: () => editFact(f.id) }, 'Edit'),
+        el('button', { class: 'small danger', type: 'button', onclick: () => removeFact(f.id) }, 'Delete')),
     ));
   }
 }
@@ -133,6 +176,7 @@ function renderGaps() {
 // facts it was matched to. Sentences that match nothing, or say something the
 // facts don't support, are listed separately with the reason.
 function runCheck() {
+  checkShown = true;
   state.narrative = $('#narrative').value;
   save();
   const result = checkNarrative(state.facts, state.narrative);
@@ -173,16 +217,48 @@ function renderSentences(box, sentences, heading) {
   );
 }
 
-// Redraws everything that depends on the facts.
+// Redraws everything that depends on the facts. If the narrative check's
+// results are showing, they are rerun so their labels match the facts.
 function render() {
+  if (editingId && !state.facts.some((f) => f.id === editingId)) editingId = null;
   renderFacts();
   renderGaps();
   $('#narrative').value = state.narrative;
   renderFields();
+  if (checkShown) runCheck();
 }
 
-// Deletes one fact (the Delete button in its table row).
+// Shows a problem with the form (or with an imported file) under the form.
+// Called with nothing, hides it.
+function showError(message) {
+  const err = $('#add-error');
+  err.textContent = message ?? '';
+  err.hidden = !message;
+}
+
+// Loads one fact into the form for editing (the Edit button in its row).
+function editFact(id) {
+  editingId = id;
+  showError();
+  render();
+  $('#fields input, #fields select')?.focus();
+}
+
+// Leaves editing without saving, and puts the form back to adding.
+function cancelEdit() {
+  editingId = null;
+  showError();
+  render();
+}
+
+// Deletes one fact (the Delete button in its table row). Responses point at
+// their med by id, so deleting a med that has responses asks first; the
+// responses are kept, and the gap finder flags them until they're fixed.
 function removeFact(id) {
+  const deps = dependentsOf(state.facts, id);
+  if (deps.length && !window.confirm(
+    `${deps.map((d) => d.id).join(', ')} ${deps.length === 1 ? 'is a response' : 'are responses'} to ${id}. `
+    + `Delete ${id} anyway? ${deps.length === 1 ? 'That response' : 'Those responses'} will be flagged until you point ${deps.length === 1 ? 'it' : 'them'} at another med or delete ${deps.length === 1 ? 'it' : 'them'}.`)) return;
   state.facts = state.facts.filter((f) => f.id !== id);
   save();
   render();
@@ -195,29 +271,34 @@ function removeFact(id) {
 $('#kind').append(...Object.entries(KINDS).map(([k, spec]) => el('option', { value: k }, spec.label)));
 $('#kind').addEventListener('change', renderFields);
 
-// "Add fact": collect the form's values into a new fact with the next free
-// id (f1, f2, ...). If a required field is missing or a time is malformed,
-// show why and don't add it. Otherwise add it, save, and redraw, keeping the
-// same kind selected so several vitals in a row are quick to enter.
+// "Add fact" / "Save changes": collect the form's values into a fact. When
+// adding, it gets the next unused id (f1, f2, ...) and goes on the end of the
+// list. When editing, it keeps its id and its place in the list, and replaces
+// the old version entirely. Either way, if a required field is missing or a
+// time is malformed, show why and change nothing. After adding, the same kind
+// stays selected so several vitals in a row are quick to enter.
 $('#add-fact').addEventListener('submit', (e) => {
   e.preventDefault();
   const kind = $('#kind').value;
-  const fact = { id: nextFactId(state.facts), kind };
+  const id = editingId ?? nextFactId(state.facts, state.lastId);
+  const fact = { id, kind };
   for (const [name, value] of new FormData(e.target)) fact[name] = String(value).trim();
   const problems = validateFact(fact);
-  const err = $('#add-error');
-  if (problems.length) {
-    err.textContent = problems.join('. ') + '.';
-    err.hidden = false;
-    return;
+  if (problems.length) return showError(problems.join('. ') + '.');
+  showError();
+  if (editingId) {
+    state.facts = state.facts.map((f) => (f.id === id ? fact : f));
+    editingId = null;
+  } else {
+    state.facts.push(fact);
+    state.lastId = idNumber(id);
   }
-  err.hidden = true;
-  state.facts.push(fact);
   save();
   render();
-  $('#kind').value = kind;
-  renderFields();
 });
+
+// "Cancel" (shown only while editing) drops the changes in the form.
+$('#cancel-edit').addEventListener('click', cancelEdit);
 
 // "Check narrative" runs the checker. Typing in the box only saves the text;
 // it doesn't re-check until the button is pressed.
@@ -227,21 +308,26 @@ $('#narrative').addEventListener('input', () => { state.narrative = $('#narrativ
 // "Load sample call": replace the report with the made-up chest pain call in
 // sample.js and check it straight away, so the planted mistakes show up.
 $('#load-sample').addEventListener('click', () => {
-  state = { facts: structuredClone(SAMPLE_FACTS), narrative: SAMPLE_NARRATIVE };
+  state = report({ facts: structuredClone(SAMPLE_FACTS), narrative: SAMPLE_NARRATIVE });
+  editingId = null;
   save();
   render();
   runCheck();
 });
 
-// "Clear all": start an empty report and wipe the results.
+// "Clear all": start an empty report and wipe the results. A new report
+// starts again from f1.
 $('#clear').addEventListener('click', () => {
-  state = { facts: [], narrative: '' };
+  state = report({});
+  editingId = null;
+  checkShown = false;
+  showError();
   save();
   render();
   for (const id of ['#verdict', '#flagged', '#matched', '#check-warnings']) $(id).replaceChildren();
 });
 
-// "Export JSON": download the facts and narrative as a file.
+// "Export JSON": download the facts, narrative and last id as a file.
 $('#export').addEventListener('click', () => {
   const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
   const a = el('a', { href: URL.createObjectURL(blob), download: 'chartcheck-report.json' });
@@ -257,12 +343,13 @@ $('#import').addEventListener('change', async (e) => {
   try {
     const data = JSON.parse(await file.text());
     if (!Array.isArray(data.facts)) throw new Error('no facts array');
-    state = { facts: data.facts, narrative: data.narrative ?? '' };
+    state = report(data);
+    editingId = null;
+    showError();
     save();
     render();
   } catch (err) {
-    $('#add-error').textContent = `Couldn't import that file: ${err.message}.`;
-    $('#add-error').hidden = false;
+    showError(`Couldn't import that file: ${err.message}.`);
   }
   e.target.value = '';
 });

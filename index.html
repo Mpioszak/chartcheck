@@ -21,13 +21,15 @@
   </header>
 
   <main>
-    <!-- 1. Enter facts one at a time. The fields change with the kind picked. -->
+    <!-- 1. Enter facts one at a time. The fields change with the kind picked.
+         Each fact in the table can be edited (it loads back into this form) or deleted. -->
     <section id="facts-section">
       <h2>1. Facts</h2>
       <form id="add-fact">
         <label>Kind <select id="kind"></select></label>
         <div id="fields"></div>
-        <button type="submit">Add fact</button>
+        <button type="submit" id="submit-fact">Add fact</button>
+        <button type="button" id="cancel-edit" hidden>Cancel</button>
       </form>
       <p id="add-error" class="error" hidden></p>
       <table id="facts">
