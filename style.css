@@ -63,10 +63,15 @@ input, select, textarea {
   border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px;
 }
 textarea { width: 100%; font-family: ui-monospace, Menlo, monospace; font-size: 0.9rem; }
-/* The facts table. A row with a problem is tinted red. */
+/* The facts table. A row with a problem is tinted red; the row being edited
+   gets a blue bar on its left. */
 table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 0.9rem; }
 th, td { text-align: left; padding: 6px; border-bottom: 1px solid var(--border); vertical-align: top; }
 tr.invalid td { background: var(--error-bg); }
+tr.editing td:first-child { box-shadow: inset 3px 0 0 var(--accent); font-weight: 600; }
+td.actions { white-space: nowrap; }
+td.actions button + button { margin-left: 4px; }
+select:disabled { opacity: 0.7; }
 /* Lists of findings from the gap finder and the checker. */
 .findings { list-style: none; padding: 0; margin: 8px 0 0; }
 .findings li { padding: 8px 12px; border-radius: 6px; margin-bottom: 6px; }

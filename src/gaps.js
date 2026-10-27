@@ -107,11 +107,13 @@ export function findGaps(facts) {
   }
   for (const r of responses) {
     if (r.to && !facts.some((f) => f.id === r.to && f.kind === 'med')) {
-      add('error', `${r.id} is a response to ${r.to}, which isn't a medication.`, r.id);
+      add('error', `${r.id} is a response to ${r.to}, which isn't an entered medication. If that med was deleted, point the response at the right one or delete it.`, r.id);
     }
   }
 
-  // Transport needs a destination, a reason, and more than one set of vitals.
+  // Transport needs a medical-necessity statement and more than one set of
+  // vitals. (Its destination is a required field, checked with the others
+  // above.) A "set" is the vitals sharing one time.
   const transports = of('transport');
   if (transports.length) {
     const necessity = of('necessity');

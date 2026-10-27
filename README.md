@@ -42,7 +42,7 @@ Pages on a private repository needs a paid GitHub plan. On the free plan, make t
 | `src/gaps.js` | Finds what's missing or inconsistent in the facts. |
 | `src/drugs.js` | Drug names and brand names to watch for, mapped to one canonical name. |
 | `src/sample.js` | The made-up chest pain call. |
-| `src/app.js` | The page: form, fact list, findings. |
+| `src/app.js` | The page: form, fact list with edit and delete, findings. |
 
 ### The narrative format
 
@@ -61,11 +61,17 @@ The checker splits the narrative into sentences, reads each value together with 
 - Values written together only match when taken from different entries. `BP 158/94 at 14:30` fails when 158/94 was taken at 14:15 and a different BP at 14:30, and `fentanyl 50 mcg IV` fails when 50 mcg was given IN and a later 25 mcg IV.
 - A drug, or a number not tied to anything, isn't in the entered facts.
 
-Sentences with no values ("A 12-lead ECG showed ST elevation in II, III and aVF.") are matched by wording against facts entered as free text: findings, procedures, transport, dispatch reason, responses and the necessity statement. Those labels are drawn dashed, because the words themselves aren't verified. Vitals, meds and call times are never matched by wording, so "Blood pressure was stable." is flagged rather than matched to a BP entry.
+Sentences with no values ("A 12-lead ECG showed ST elevation in II, III and aVF.") are matched by wording against facts entered as free text: findings, procedures, transport, dispatch reason, responses, patient notes and the necessity statement. Those labels are drawn dashed, because the words themselves aren't verified. Vitals, meds and call times are never matched by wording, so "Blood pressure was stable." is flagged rather than matched to a BP entry.
 
 It **warns** when a number is spelled out ("two") because words can't be checked, when an entered fact matches no sentence, and when a med is mentioned but never stated with its dose, unit and route. Old-style tags like `[f3, f8]` are ignored, with a warning.
 
-A value belongs to the nearest label before it in the same clause. Clauses split at commas, semicolons, colons, "and", "then", "but" and "while". The words it recognises as labels, units, routes and call milestones are listed in `src/claims.js`. Brand and generic names count as the same drug (Narcan and naloxone). Readings can be written `158/94`, `158 / 94` or `158 over 94`, and times `14:32`, `at 1432` or `1432 hrs`. Sentences end at `.`, `!`, `?` or a line break, but not after abbreviations like `St.` or inside numbers like `0.4`.
+A value belongs to the nearest label before it in the same clause. Clauses split at commas, semicolons, colons, brackets, "and", "then", "but" and "while". The words it recognises as labels, units, routes and call milestones are listed in `src/claims.js`. Brand and generic names count as the same drug (Narcan and naloxone). Readings can be written `158/94`, `158 / 94` or `158 over 94`, and times `14:32`, `at 1432` or `1432 hrs`. Sentences end at `.`, `!`, `?` or a line break, but not after abbreviations like `St.` or inside numbers like `0.4`.
+
+### Editing and deleting facts
+
+Each row in the facts table has **Edit** and **Delete**. Edit loads the fact back into the form; its kind is fixed, and **Save changes** replaces it in place with the same id. Ids are never reused: delete f6 and the next fact added is f7, so a label like `f6` in an old export or a screenshot never ends up meaning a different entry. After any edit or delete, the gap list updates, and if narrative check results are showing they are rerun against the changed facts.
+
+Deleting a med that has a recorded response asks first. The response is kept and flagged in the gap list until it is pointed at another med or deleted.
 
 ### Gap rules
 
@@ -89,4 +95,4 @@ A value belongs to the nearest label before it in the same clause. Clauses split
 
 1. Generate the narrative with Claude and run it through the checker before showing it. For the prototype the user pastes their own API key, which is called from the browser and kept in local storage. Before anyone else uses it, move the key behind a small proxy.
 2. Check the words of each sentence against its matched facts, not just the numbers.
-3. Edit facts in place, and add gap rules that match your protocols.
+3. Add gap rules that match your protocols.

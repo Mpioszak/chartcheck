@@ -1,6 +1,7 @@
 // The fact format. Every report is a flat list of facts; each fact has an id
 // ("f1", "f2", ...), a kind, and the fields listed for that kind below.
-// Times are "HH:MM", 24-hour.
+// Times are "HH:MM", 24-hour. An id belongs to one fact for good: editing a
+// fact keeps its id, and a deleted fact's id is never handed out again.
 
 // The call milestones, in the order they should happen. The gap finder uses
 // this order to catch times that are out of sequence.
@@ -44,8 +45,9 @@ export const VITAL_LABELS = {
 export const ROUTES = ['PO', 'SL', 'IV', 'IO', 'IM', 'IN', 'NEB', 'NC', 'NRB', 'SQ', 'PR', 'ET'];
 
 // Every kind of fact a medic can enter, with the fields each one has. This
-// one table drives the form (which boxes to show), validation (which boxes
-// must be filled in), and the table of entered facts.
+// one table drives the form (which boxes to show, for adding and editing) and
+// validation (which boxes must be filled in). The facts table shows each
+// kind's label.
 //
 // field: [label, input type, required?]
 export const KINDS = {
@@ -61,8 +63,9 @@ export const KINDS = {
   necessity: { label: 'Medical necessity', fields: { text: ['Why an ambulance was needed', 'text', true] } },
 };
 
-// Fields whose values are references or enums rather than entered facts.
-// They are left out of the text the checker searches.
+// Fields that are bookkeeping rather than something the medic observed: the
+// id, the kind, and the med a response points to. They are left out when a
+// fact is written as text.
 const NON_FACT_FIELDS = new Set(['id', 'kind', 'to']);
 
 // A fact as one line of plain text, e.g. "Blood pressure 158/94" or
@@ -103,9 +106,22 @@ export function validateFact(fact) {
   return problems;
 }
 
-// The id for a new fact: one more than the highest id in use (so after f1..f5,
-// the next is f6).
-export function nextFactId(facts) {
-  const max = facts.reduce((n, f) => Math.max(n, Number(String(f.id).slice(1)) || 0), 0);
+// The number in a fact id ("f12" -> 12), or 0 if it doesn't have one.
+export function idNumber(id) {
+  return Number(String(id).slice(1)) || 0;
+}
+
+// The id for a new fact: one more than the highest id in use or ever handed
+// out. lastId is the highest number handed out so far, so deleting f6 and
+// then adding a fact gives f7, not a second f6. Without it (an old save or
+// import) the highest id in the list is used.
+export function nextFactId(facts, lastId = 0) {
+  const max = facts.reduce((n, f) => Math.max(n, idNumber(f.id)), lastId);
   return `f${max + 1}`;
+}
+
+// The facts that point at a fact by id: the responses to a med. Deleting a
+// fact leaves these pointing at nothing, so the page warns before deleting.
+export function dependentsOf(facts, id) {
+  return facts.filter((f) => f.kind === 'response' && f.to === id);
 }

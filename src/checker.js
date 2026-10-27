@@ -12,8 +12,9 @@
 //   3. flags the sentence if any claim matches no fact, or if claims written
 //      together ("BP 158/94 at 14:30", "fentanyl 50 mcg IV") only match when
 //      taken from different facts;
-//   4. for sentences with no values, matches the wording against facts
-//      entered as free text (findings, procedures, transport, necessity);
+//   4. matches the wording against facts entered as free text (dispatch
+//      reason, findings, procedures, responses, transport, necessity,
+//      patient notes), for sentences with values or without;
 //   5. flags the sentence if nothing in it matches any fact.
 //
 // Values are never pooled: a reading only matches a fact for the same vital,
@@ -158,7 +159,9 @@ const STOP_WORDS = new Set(`
   their them then there these they this those through under until upon very want were what when where which
   while will with within without would your`.split(/\s+/).filter(Boolean));
 
-// The meaningful words in some text, lightly stemmed ("arms" -> "arm").
+// The meaningful words in some text: a trailing "'s" or plural "s" is dropped
+// ("elevations" -> "elevation"), and words under four letters and common
+// words like "with" are skipped.
 function contentWords(text) {
   const words = String(text).toLowerCase().match(/[a-z][a-z'-]*/g) ?? [];
   return new Set(words

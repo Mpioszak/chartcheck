@@ -12,7 +12,8 @@
 // the same claims.
 //
 // A value belongs to the nearest label before it in the same clause (clauses
-// are split at commas, semicolons, "and", "then", "but", "while"). A dose
+// are split at commas, semicolons, colons, brackets, "and", "then", "but",
+// "while"). A dose
 // belongs to the nearest drug before it in the clause, else the next one. A
 // time belongs to the most recent label, drug or milestone in the clause,
 // else the next one. A label or drug left without a value carries over to
@@ -219,7 +220,8 @@ export function makeReader(enteredDrugs = []) {
   //   at/hrs  times without a colon, "at 1415" or "1415 hrs"
   //   pair    "158/94"
   //   single  a number, with its unit if one follows ("0.4 mg", "104 bpm")
-  //   sep     a clause break: comma, semicolon, "and", "then", "but", "while"
+  //   sep     a clause break: comma, semicolon, colon, bracket, "and",
+  //           "then", "but", "while"
   //   end     a sentence end
   const re = new RegExp([
     `(?<phrase>(?<![a-z0-9])(?:${alternation([...phrases.keys()])})(?![a-z0-9]))`,
