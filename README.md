@@ -9,7 +9,7 @@ The medic enters the call as discrete facts (vitals, meds, times, findings). The
 ## Try it
 
 https://mpioszak.github.io/chartcheck/
-Open the page and click **Load sample call**. The sample narrative has two planted mistakes (a repeat blood pressure nobody took and a drug that was never given) and the sample facts leave out the response to aspirin. All three get caught.
+Open the page and click **Load sample call**. It loads one of six made-up calls at random (chest pain, low blood sugar, asthma, opioid overdose, a fall with a hip injury, and a possible stroke), and clicking again loads a different one. Each has planted mistakes: the narrative gets a value wrong or adds one nobody entered (a wrong blood pressure, a drug never given, mcg written for mg, a wrong time), and the facts leave something out or out of order (no response to a drug, no medical-necessity statement, a departure timed before patient contact). All of them get caught. The planted mistakes are listed above each call in `src/sample.js`.
 
 ## Run locally
 
@@ -41,7 +41,7 @@ Pages on a private repository needs a paid GitHub plan. On the free plan, make t
 | `src/claims.js` | Reads text into claims: a reading tied to its vital, a dose to its drug and unit, a time to its event. |
 | `src/gaps.js` | Finds what's missing or inconsistent in the facts. |
 | `src/drugs.js` | Drug names and brand names to watch for, mapped to one canonical name. |
-| `src/sample.js` | The made-up chest pain call. |
+| `src/sample.js` | The made-up sample calls, with their planted mistakes. |
 | `src/app.js` | The page: form, fact list with edit and delete, findings. |
 
 ### The narrative format
