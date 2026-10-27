@@ -21,7 +21,9 @@ import { factClaims, formatTime, makeReader, sameValue, subjectName } from './cl
 
 const TAG_RE = /\[([^\]]*)\]/g;
 
-// Splits a narrative into spans, each with the tag that closes it.
+// Splits a narrative into spans, each with the tag that closes it. Any text
+// left after the last tag becomes a span with no tag (ids: null), which the
+// checker rejects.
 export function splitSpans(narrative) {
   const spans = [];
   let last = 0;
@@ -36,9 +38,12 @@ export function splitSpans(narrative) {
   return spans;
 }
 
+// Helpers for writing readable error messages.
 const quote = (s) => `"${s}"`;
 const name = (subject) => subjectName(subject);
 
+// One supported value written out with the fact it came from, e.g.
+// "0.4 mg (f13)", so a message can say what the cited fact actually says.
 function show(s) {
   switch (s.kind) {
     case 'value': return `${s.value} (${s.factId})`;
@@ -53,8 +58,16 @@ const list = (items) => [...new Set(items.map(show))].join(' or ');
 
 // Compares one narrative claim with the cited facts' claims. Returns an error
 // message, or null when a cited fact supports it.
+//
+// For each kind of claim it asks: is there a cited fact that says the same
+// thing about the same subject? If not, the message says what the cited
+// facts do say, and elsewhere() adds whether the value was entered in some
+// other fact the sentence forgot to cite.
 function verify(c, cited, elsewhere) {
   switch (c.kind) {
+    // A reading. Tied to a vital ("BP 158/94"): the cited reading of that
+    // vital must match. Not tied to anything: any cited reading or dose with
+    // that number will do.
     case 'value': {
       if (c.subject) {
         const same = cited.filter((s) => s.kind === 'value' && s.subject === c.subject);
@@ -68,6 +81,8 @@ function verify(c, cited, elsewhere) {
       if (cited.some(match)) return null;
       return `The number ${quote(c.raw)} isn't in the cited facts.` + elsewhere(match);
     }
+    // A dose. Number and unit must both match the cited dose of that drug,
+    // so 0.4 mcg against an entered 0.4 mg is rejected.
     case 'dose': {
       if (!c.drug) {
         const match = (s) => s.kind === 'dose' && s.value === c.value && s.unit === c.unit;
@@ -84,6 +99,8 @@ function verify(c, cited, elsewhere) {
       return `${quote(c.raw)} is given for ${c.drug}, but no cited fact has a dose of ${c.drug}.`
         + elsewhere((s) => s.kind === 'dose' && s.drug === c.drug && s.value === c.value && s.unit === c.unit);
     }
+    // A route. Must match the cited route of that drug (or of that dose,
+    // when the sentence doesn't name the drug).
     case 'route': {
       if (!c.drug) {
         // A dose nobody entered is already its own error.
@@ -96,6 +113,8 @@ function verify(c, cited, elsewhere) {
       if (routes.length) return `${quote(c.raw)} is given as the route for ${c.drug}, but the cited route is ${list(routes)}.`;
       return `${quote(c.raw)} is given as the route for ${c.drug}, but no cited fact has a route for it.`;
     }
+    // A time. Tied to an event ("BP ... at 14:15", "departed scene at 14:24"):
+    // must match that event's cited time. Otherwise any cited time will do.
     case 'time': {
       if (!c.subject) {
         const match = (s) => s.kind === 'time' && s.time === c.time;
@@ -108,6 +127,7 @@ function verify(c, cited, elsewhere) {
       return `${formatTime(c.time)} is given for ${name(c.subject)}, but no cited fact has a time for ${name(c.subject)}.`
         + elsewhere((s) => s.kind === 'time' && s.subject === c.subject && s.time === c.time);
     }
+    // A drug name. Some cited fact must involve that drug.
     case 'drug': {
       const match = (s) => s.kind === 'drug' && s.drug === c.drug;
       if (cited.some(match)) return null;
@@ -117,11 +137,20 @@ function verify(c, cited, elsewhere) {
   return null;
 }
 
+// The main check. Returns { ok, errors, warnings, spans }. ok is true only
+// when there are no errors. Errors mean the narrative says something the
+// entered facts don't support; warnings point at things worth a second look
+// (an entered fact the narrative never mentions, a spelled-out number).
 export function checkNarrative(facts, narrative) {
+  // Set up: look up facts by id, build a reader that knows the drug names
+  // entered in this report, and work out what each fact supports.
   const byId = new Map(facts.map((f) => [f.id, f]));
   const reader = makeReader(facts.filter((f) => f.kind === 'med' && f.drug).map((f) => f.drug));
   const supportById = new Map(facts.map((f) => [f.id, factClaims(f, reader, byId)]));
 
+  // Running totals across all spans: which facts were cited anywhere, which
+  // meds were stated in full, and which drugs already have an error (so
+  // they don't also get a "never stated" warning).
   const errors = [];
   const warnings = [];
   const cited = new Set();
@@ -129,8 +158,11 @@ export function checkNarrative(facts, narrative) {
   const drugsWithErrors = new Set();
   const spans = splitSpans(narrative);
 
+  // Check each tagged span in turn.
   spans.forEach((span, i) => {
     const at = { span: i, text: span.text };
+    // First, the tag itself: there must be text before it, the tag must
+    // list at least one id, and every id must be a fact that exists.
     if (!span.text) {
       if (span.tag) warnings.push({ ...at, message: `Source tag ${span.tag} has no text before it.` });
       return;
@@ -147,9 +179,13 @@ export function checkNarrative(facts, narrative) {
     if (unknown.length) {
       errors.push({ ...at, message: `Cites ${unknown.join(', ')}, which ${unknown.length > 1 ? "don't" : "doesn't"} exist.` });
     }
+    // Everything the cited facts support, pooled for this span. Each claim
+    // still carries its subject (which vital, which drug), so a value can
+    // only be matched to the fact it belongs to.
     const sources = span.ids.filter((id) => byId.has(id));
     sources.forEach((id) => cited.add(id));
     const support = sources.flatMap((id) => supportById.get(id));
+    // For error messages: was the value entered in a fact this span didn't cite?
     const elsewhere = (match) => {
       const ids = [...supportById].filter(([id, claims]) => !sources.includes(id) && claims.some(match)).map(([id]) => id);
       return ids.length
@@ -157,6 +193,7 @@ export function checkNarrative(facts, narrative) {
         : ' Nothing entered matches it.';
     };
 
+    // Read the span's text into claims, the same way fact text is read.
     const { claims, numberWords } = reader.read(span.text);
 
     // An unsupported drug gets one error, not one per dose, route and time.
@@ -166,6 +203,7 @@ export function checkNarrative(facts, narrative) {
       if (problem && !badDrugs.has(c.drug)) errors.push({ ...at, message: problem });
       if (problem) badDrugs.add(c.drug);
     }
+    // Then every other claim: values, doses, routes and times.
     const mismatched = new Set();
     for (const c of claims.filter((c) => c.kind !== 'drug')) {
       if (badDrugs.has(c.drug) || badDrugs.has(c.subject)) continue;
@@ -187,6 +225,8 @@ export function checkNarrative(facts, narrative) {
       if (!stated) errors.push({ ...at, message: `Cites ${id} (${name(f.type)} ${f.value}) but doesn't state that reading.` });
     }
 
+    // Note which cited meds had their full dose, unit and route stated here,
+    // for the "never stated in full" warning at the end.
     for (const id of sources) {
       const f = byId.get(id);
       if (f.kind !== 'med') continue;
@@ -199,11 +239,14 @@ export function checkNarrative(facts, narrative) {
       if (doseOk && routeOk) medsStated.add(id);
     }
 
+    // "Two puffs" can't be checked against anything, so ask for digits.
     for (const w of numberWords) {
       warnings.push({ ...at, message: `"${w}" is a spelled-out number, which can't be checked. Write numbers as digits.` });
     }
   });
 
+  // After all spans: warn about entered facts the narrative never cites, and
+  // meds that are cited but never written out with dose, unit and route.
   for (const f of facts) {
     if (!cited.has(f.id)) {
       warnings.push({ span: null, text: null, message: `${f.id} (${factText(f)}) was entered but the narrative never cites it.` });

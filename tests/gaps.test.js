@@ -1,3 +1,7 @@
+// Tests for the gap finder (src/gaps.js). Each test starts from a small
+// complete report and adds or changes facts to trigger one finding.
+// Run with `npm test`.
+
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { findGaps } from '../src/gaps.js';
@@ -8,6 +12,7 @@ const base = [
   { id: 'f2', kind: 'dispatch', time: '10:00', text: 'fall' },
   { id: 'f3', kind: 'finding', time: '10:10', text: 'on floor' },
 ];
+// Shorthand: each finding as "severity: message".
 const msgs = (facts) => findGaps(facts).map((g) => `${g.severity}: ${g.message}`);
 
 test('a complete minimal report has no gaps', () => {

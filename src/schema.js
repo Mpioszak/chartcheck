@@ -2,6 +2,8 @@
 // ("f1", "f2", ...), a kind, and the fields listed for that kind below.
 // Times are "HH:MM", 24-hour.
 
+// The call milestones, in the order they should happen. The gap finder uses
+// this order to catch times that are out of sequence.
 export const MILESTONES = [
   'dispatched',
   'enroute',
@@ -12,6 +14,7 @@ export const MILESTONES = [
   'transfer',
 ];
 
+// How each milestone is shown to the medic.
 export const MILESTONE_LABELS = {
   dispatched: 'Dispatched',
   enroute: 'En route',
@@ -22,6 +25,7 @@ export const MILESTONE_LABELS = {
   transfer: 'Care transferred',
 };
 
+// The vital signs the form offers, and how each one is shown.
 export const VITAL_TYPES = ['bp', 'hr', 'rr', 'spo2', 'etco2', 'gcs', 'bgl', 'temp', 'pain'];
 
 export const VITAL_LABELS = {
@@ -36,8 +40,13 @@ export const VITAL_LABELS = {
   pain: 'Pain score',
 };
 
+// Routes a medication can be given by (by mouth, under the tongue, IV, and so on).
 export const ROUTES = ['PO', 'SL', 'IV', 'IO', 'IM', 'IN', 'NEB', 'NC', 'NRB', 'SQ', 'PR', 'ET'];
 
+// Every kind of fact a medic can enter, with the fields each one has. This
+// one table drives the form (which boxes to show), validation (which boxes
+// must be filled in), and the table of entered facts.
+//
 // field: [label, input type, required?]
 export const KINDS = {
   patient: { label: 'Patient', fields: { age: ['Age', 'text', true], sex: ['Sex', 'text', true], text: ['Notes', 'text', false] } },
@@ -56,6 +65,8 @@ export const KINDS = {
 // They are left out of the text the checker searches.
 const NON_FACT_FIELDS = new Set(['id', 'kind', 'to']);
 
+// A fact as one line of plain text, e.g. "Blood pressure 158/94" or
+// "aspirin 324 mg PO". Used in the facts table and in messages about a fact.
 export function factText(fact) {
   const parts = [];
   for (const [key, value] of Object.entries(fact)) {
@@ -67,6 +78,8 @@ export function factText(fact) {
   return parts.join(' ');
 }
 
+// Turns "HH:MM" into minutes since midnight ("14:02" -> 842), so times can be
+// compared. Anything that isn't a valid 24-hour time comes back as null.
 export function parseTime(value) {
   const m = /^([01]?\d|2[0-3]):([0-5]\d)$/.exec(String(value ?? '').trim());
   return m ? Number(m[1]) * 60 + Number(m[2]) : null;
@@ -90,6 +103,8 @@ export function validateFact(fact) {
   return problems;
 }
 
+// The id for a new fact: one more than the highest id in use (so after f1..f5,
+// the next is f6).
 export function nextFactId(facts) {
   const max = facts.reduce((n, f) => Math.max(n, Number(String(f.id).slice(1)) || 0), 0);
   return `f${max + 1}`;

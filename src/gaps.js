@@ -4,6 +4,9 @@
 
 import { MILESTONES, MILESTONE_LABELS, parseTime, validateFact } from './schema.js';
 
+// The time the call was dispatched, which every other time is measured from.
+// Uses the "Dispatched" call time if there is one, else the dispatch entry's
+// time. Null if neither has a usable time.
 function dispatchTime(facts) {
   const dispatched = facts.find((f) => f.kind === 'milestone' && f.milestone === 'dispatched')
     ?? facts.find((f) => f.kind === 'dispatch');
@@ -24,27 +27,37 @@ function clock(origin) {
   };
 }
 
+// A med written out for a message, e.g. "fentanyl 50 mcg IV".
 function medName(med) {
   return [med.drug, med.dose && `${med.dose}${med.unit ? ' ' + med.unit : ''}`, med.route].filter(Boolean).join(' ');
 }
 
+// Runs every check below and returns the list of findings. "error" means
+// something is wrong (bad data, times that can't be right); "warning" means
+// something a close reader would expect to see is missing.
 export function findGaps(facts) {
   const gaps = [];
+  // Helpers: add() records a finding; at() turns a time into minutes since
+  // dispatch; of() lists the facts of one kind.
   const add = (severity, message, ...factIds) => gaps.push({ severity, message, factIds });
   const dispatched = dispatchTime(facts);
   const at = clock(dispatched);
   const of = (kind) => facts.filter((f) => f.kind === kind);
 
+  // Each fact on its own: required fields filled in, times in HH:MM.
   for (const f of facts) {
     for (const problem of validateFact(f)) add('error', `${f.id}: ${problem}.`, f.id);
   }
 
+  // The basics every report needs.
   const patient = of('patient');
   if (!patient.length) add('warning', 'No patient age or sex entered.');
   if (!of('dispatch').length) add('warning', 'No dispatch reason entered (what the call came in as).');
   if (!of('finding').length) add('warning', 'No findings entered (what you found on arrival).');
 
-  // Call times in order.
+  // Call times in order. First, each milestone should be entered once. Then,
+  // taking the milestones in their expected order (dispatched, en route, on
+  // scene, ...), each one must not be earlier than the one before it.
   const milestones = of('milestone').filter((f) => at(f.time) !== null);
   const seen = new Map();
   for (const m of milestones) {

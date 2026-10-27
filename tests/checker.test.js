@@ -1,3 +1,7 @@
+// Tests for the fact checker (src/checker.js). Each test feeds a short
+// narrative against the facts below and checks what is accepted or rejected.
+// Run with `npm test`.
+
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { checkNarrative, splitSpans } from '../src/checker.js';
@@ -15,6 +19,7 @@ const facts = [
   { id: 'f9', kind: 'response', time: '14:25', to: 'f3', text: 'pain decreased from 8/10 to 5/10' },
 ];
 
+// Shorthands: the error messages, or all the warnings joined, for a narrative.
 const errors = (narrative) => checkNarrative(facts, narrative).errors.map((e) => e.message);
 const warnings = (narrative) => checkNarrative(facts, narrative).warnings.map((w) => w.message).join('\n');
 

@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <!-- Title, the demo-only warning, and the buttons that act on the whole report. -->
   <header>
     <h1>chartcheck</h1>
     <p class="tag">Enter the facts. Every claim in the narrative has to trace back to one.</p>
@@ -20,6 +21,7 @@
   </header>
 
   <main>
+    <!-- 1. Enter facts one at a time. The fields change with the kind picked. -->
     <section id="facts-section">
       <h2>1. Facts</h2>
       <form id="add-fact">
@@ -34,11 +36,13 @@
       </table>
     </section>
 
+    <!-- 2. What a close reader would find missing. Updates as facts change. -->
     <section id="gaps-section">
       <h2>2. What's missing</h2>
       <ul id="gaps" class="findings"></ul>
     </section>
 
+    <!-- 3. Paste or write the narrative, then check it against the facts. -->
     <section id="narrative-section">
       <h2>3. Narrative check</h2>
       <p class="hint">End each sentence with the ids it came from, like <code>[f3, f8]</code>. Each value has to match the fact it belongs to: a reading its vital, a dose its drug, unit and route, a time its event.</p>
@@ -50,6 +54,7 @@
     </section>
   </main>
 
+  <!-- All behaviour lives in src/app.js. -->
   <script type="module" src="src/app.js"></script>
 </body>
 </html>

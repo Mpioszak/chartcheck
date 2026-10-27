@@ -3,6 +3,7 @@
 // pressure nobody took, and a drug that was never given. The facts also leave
 // out the response to aspirin, which the gap finder should flag.
 
+// The facts as a medic would enter them on the form.
 export const SAMPLE_FACTS = [
   { id: 'f1', kind: 'patient', age: '67', sex: 'male', text: '' },
   { id: 'f2', kind: 'dispatch', time: '14:02', text: 'chest pain' },
@@ -27,6 +28,9 @@ export const SAMPLE_FACTS = [
   { id: 'f21', kind: 'necessity', text: 'Suspected inferior STEMI requiring continuous cardiac monitoring, ALS interventions en route and direct cath lab activation; private transport would delay definitive care.' },
 ];
 
+// The narrative an AI might write from those facts. Each sentence ends with
+// the ids of the facts it came from. The BP of 128/76 at 14:30 (the entered
+// reading was 136/88) and the ondansetron line are the planted mistakes.
 export const SAMPLE_NARRATIVE = `Dispatched at 14:02 for chest pain. [f2, f3]
 Arrived on scene at 14:11 and made patient contact at 14:13. [f5, f6]
 Found a 67-year-old male sitting upright in the kitchen, pale and diaphoretic, reporting crushing substernal chest pain radiating to the left arm that began 30 minutes prior. [f1, f7]
