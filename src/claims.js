@@ -109,7 +109,7 @@ const UNITS = [
 
 const VITALS = new Set(VITAL_TYPES);
 
-// Short names used in error messages ("the cited BP is ...").
+// Short names used in error messages ("the entered BP is ...").
 export const SUBJECT_NAMES = {
   bp: 'BP', hr: 'HR', rr: 'RR', spo2: 'SpO2', etco2: 'EtCO2', gcs: 'GCS',
   bgl: 'blood glucose', temp: 'temperature', pain: 'pain', age: 'age', duration: 'duration',
@@ -280,10 +280,11 @@ export function makeReader(enteredDrugs = []) {
     const tokens = tokenize(src);
     const claims = [];
     const subjects = new Set(tokens.filter((t) => t.subject).map((t) => t.subject));
+    const clauses = { count: 0 };
     let sentence = [];
     for (const t of [...tokens, { type: 'end' }]) {
       if (t.type === 'end') {
-        bindSentence(sentence, claims);
+        bindSentence(sentence, claims, clauses);
         sentence = [];
       } else {
         sentence.push(t);
@@ -300,17 +301,19 @@ export function makeReader(enteredDrugs = []) {
 // resulting claims to the list. The sentence is first split into clauses at
 // commas, "and", "then" and so on, because a value almost always belongs to
 // a label or drug in its own clause. The rules are in the comment at the top
-// of this file.
-function bindSentence(tokens, claims) {
-  const clauses = [[]];
+// of this file. Each claim is numbered with its clause, so the checker can
+// tell which claims were written together ("BP 158/94 at 14:15").
+function bindSentence(tokens, claims, clauses) {
+  const clauseList = [[]];
   for (const t of tokens) {
-    if (t.type === 'sep') clauses.push([]);
-    else clauses.at(-1).push(t);
+    if (t.type === 'sep') clauseList.push([]);
+    else clauseList.at(-1).push(t);
   }
   // A label or drug from the previous clause that never got a value, so it
   // can be picked up here ("Nitroglycerin was given, 0.4 mg SL").
   let dangling = { label: null, drug: null };
-  for (const clause of clauses) {
+  for (const clause of clauseList) {
+    const first = claims.length;
     let last = null; // most recent label, drug or milestone in this clause
     let lastDrug = null;
     const used = new Set();
@@ -373,6 +376,8 @@ function bindSentence(tokens, claims) {
         }
       }
     });
+    for (const c of claims.slice(first)) c.clause = clauses.count;
+    clauses.count += 1;
 
     // Remember a label or drug in this clause that never got a value, for
     // the next clause.

@@ -28,18 +28,18 @@ export const SAMPLE_FACTS = [
   { id: 'f21', kind: 'necessity', text: 'Suspected inferior STEMI requiring continuous cardiac monitoring, ALS interventions en route and direct cath lab activation; private transport would delay definitive care.' },
 ];
 
-// The narrative an AI might write from those facts. Each sentence ends with
-// the ids of the facts it came from. The BP of 128/76 at 14:30 (the entered
+// The narrative an AI might write from those facts, as plain sentences. The
+// checker works out which facts each sentence came from. The BP of 128/76 at 14:30 (the entered
 // reading was 136/88) and the ondansetron line are the planted mistakes.
-export const SAMPLE_NARRATIVE = `Dispatched at 14:02 for chest pain. [f2, f3]
-Arrived on scene at 14:11 and made patient contact at 14:13. [f5, f6]
-Found a 67-year-old male sitting upright in the kitchen, pale and diaphoretic, reporting crushing substernal chest pain radiating to the left arm that began 30 minutes prior. [f1, f7]
-Initial vitals were BP 158/94, HR 104 and SpO2 93%. [f8, f9, f10]
-A 12-lead ECG showed ST elevation in II, III and aVF and was transmitted to St. Mary's. [f11]
-Administered aspirin 324 mg PO at 14:18 and nitroglycerin 0.4 mg SL at 14:20. [f12, f13]
-Following nitroglycerin, pain decreased from 8/10 to 5/10. [f13, f14]
-Administered 4 mg ondansetron IV for nausea. [f13]
-Departed scene at 14:24, transporting emergent to St. Mary's cath lab in semi-Fowler position. [f15, f18]
-Repeat vitals at 14:30 were BP 128/76 and HR 96. [f16, f17]
-Arrived at 14:38 and transferred care to the cath lab team at 14:42. [f19, f20]
-Ambulance transport was medically necessary for suspected inferior STEMI requiring continuous cardiac monitoring, ALS interventions en route and direct cath lab activation. [f21]`;
+export const SAMPLE_NARRATIVE = `Dispatched at 14:02 for chest pain.
+Arrived on scene at 14:11 and made patient contact at 14:13.
+Found a 67-year-old male sitting upright in the kitchen, pale and diaphoretic, reporting crushing substernal chest pain radiating to the left arm that began 30 minutes prior.
+Initial vitals were BP 158/94, HR 104 and SpO2 93%.
+A 12-lead ECG showed ST elevation in II, III and aVF and was transmitted to St. Mary's.
+Administered aspirin 324 mg PO at 14:18 and nitroglycerin 0.4 mg SL at 14:20.
+Following nitroglycerin, pain decreased from 8/10 to 5/10.
+Administered 4 mg ondansetron IV for nausea.
+Departed scene at 14:24, transporting emergent to St. Mary's cath lab in semi-Fowler position.
+Repeat vitals at 14:30 were BP 128/76 and HR 96.
+Arrived at 14:38 and transferred care to the cath lab team at 14:42.
+Ambulance transport was medically necessary for suspected inferior STEMI requiring continuous cardiac monitoring, ALS interventions en route and direct cath lab activation.`;
