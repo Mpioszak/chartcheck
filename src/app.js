@@ -19,7 +19,7 @@
 import { KINDS, MILESTONES, MILESTONE_LABELS, VITAL_TYPES, VITAL_LABELS, ROUTES, dependentsOf, factText, idNumber, nextFactId, validateFact } from './schema.js';
 import { checkNarrative } from './checker.js';
 import { findGaps } from './gaps.js';
-import { SAMPLE_FACTS, SAMPLE_NARRATIVE } from './sample.js';
+import { SAMPLE_CALLS, randomSampleIndex } from './sample.js';
 
 const STORAGE_KEY = 'chartcheck:v1';
 // Shorthand for finding one element on the page, e.g. $('#narrative').
@@ -305,10 +305,14 @@ $('#cancel-edit').addEventListener('click', cancelEdit);
 $('#check').addEventListener('click', runCheck);
 $('#narrative').addEventListener('input', () => { state.narrative = $('#narrative').value; save(); });
 
-// "Load sample call": replace the report with the made-up chest pain call in
-// sample.js and check it straight away, so the planted mistakes show up.
+// "Load sample call": replace the report with one of the made-up calls in
+// sample.js, picked at random, and check it straight away, so the planted
+// mistakes show up. A sample whose narrative is already in the box isn't
+// picked again, so each click shows a different call.
 $('#load-sample').addEventListener('click', () => {
-  state = report({ facts: structuredClone(SAMPLE_FACTS), narrative: SAMPLE_NARRATIVE });
+  const current = SAMPLE_CALLS.findIndex((c) => c.narrative === state.narrative);
+  const sample = SAMPLE_CALLS[randomSampleIndex(current)];
+  state = report({ facts: structuredClone(sample.facts), narrative: sample.narrative });
   editingId = null;
   save();
   render();
