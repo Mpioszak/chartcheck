@@ -237,6 +237,18 @@ test('missing words ignore case, punctuation, plurals and filler words, but not 
   assert.deepEqual(missing('A 12-lead showed ST elevation.'), [[{ id: 'f2', words: ['ECG', 'no'] }]]);
 });
 
+test('a fact split over two sentences is fine when every word turns up in one', () => {
+  const r = check('Chief complaint of crushing chest pain. The chest pain was radiating to the left arm.');
+  assert.deepEqual(r.sentences.map((s) => s.ids), [['f14'], ['f14']]);
+  assert.deepEqual(r.sentences.map((s) => s.missing), [[], []]);
+});
+
+test('words missing from every sentence matched to a fact are listed on each of them', () => {
+  const r = check('Chief complaint of crushing chest pain. The chest pain was radiating.');
+  const missing = [{ id: 'f14', words: ['left', 'arm'] }];
+  assert.deepEqual(r.sentences.map((s) => s.missing), [missing, missing]);
+});
+
 test('only free-text facts are checked for missing words', () => {
   // f3 is matched by its dose and route; a med has no free text to leave out.
   const r = check('Gave nitro 0.4 mg SL.');
