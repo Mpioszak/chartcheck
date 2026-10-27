@@ -21,6 +21,8 @@
 import { DRUG_ALIASES, canonicalDrug } from './drugs.js';
 import { MILESTONE_LABELS, VITAL_TYPES, parseTime } from './schema.js';
 
+// Words that name each vital sign (plus age) in a sentence. A number after
+// one of these is read as that vital's reading.
 const VITAL_WORDS = {
   bp: ['blood pressure', 'b/p', 'bp'],
   hr: ['heart rate', 'pulse rate', 'pulse', 'hr'],
@@ -46,6 +48,7 @@ const MILESTONE_WORDS = {
   transfer: ['transferred care', 'care was transferred', 'care transferred', 'transfer of care', 'report given', 'gave report'],
 };
 
+// Ways each route can be written.
 const ROUTE_WORDS = {
   PO: ['po', 'orally', 'oral', 'by mouth'],
   SL: ['sl', 'sublingual', 'sublingually'],
@@ -66,6 +69,8 @@ const CAPS_ONLY = new Set(['in', 'pr', 'et']);
 // Terms with digits in them that aren't values.
 const NEUTRAL_WORDS = ['12-lead', '12 lead', '15-lead', '15 lead', 'co2', 'd5w'];
 
+// Units that can follow a number. The unit says what kind of value it is:
+// "mg" makes it a dose, "bpm" a heart rate, "minutes" a duration.
 // [spellings, canonical unit, what a value with this unit is]
 const UNITS = [
   [['mg/dl', 'mg per dl'], 'mg/dl', 'bgl'],
@@ -104,6 +109,7 @@ const UNITS = [
 
 const VITALS = new Set(VITAL_TYPES);
 
+// Short names used in error messages ("the cited BP is ...").
 export const SUBJECT_NAMES = {
   bp: 'BP', hr: 'HR', rr: 'RR', spo2: 'SpO2', etco2: 'EtCO2', gcs: 'GCS',
   bgl: 'blood glucose', temp: 'temperature', pain: 'pain', age: 'age', duration: 'duration',
@@ -114,12 +120,18 @@ export function subjectName(subject) {
   return SUBJECT_NAMES[subject] ?? subject;
 }
 
+// Numbers spelled out in words. These can't be checked, so the checker warns
+// about them.
 const NUMBER_WORDS = [
   'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve',
   'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety', 'hundred', 'dozen',
 ];
 const NUMBER_WORD_RE = new RegExp(`(?<![a-z])(${NUMBER_WORDS.join('|')})(?![a-z])`, 'g');
 
+// Small text helpers. key() puts a phrase in a standard form for lookups
+// (lowercase, single spaces, µg as mcg). alternation() builds a regex that
+// matches any of a list of phrases, longest first so "blood pressure" wins
+// over "pressure".
 const key = (s) => String(s).toLowerCase().replace(/µ/g, 'mc').replace(/\s+/g, ' ').trim();
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const alternation = (phrases) => [...new Set(phrases)]
@@ -127,6 +139,7 @@ const alternation = (phrases) => [...new Set(phrases)]
   .map((p) => escapeRe(p).replace(/ /g, '\\s+'))
   .join('|');
 
+// Lookup tables from every spelling to its standard unit and route.
 const UNIT_INFO = new Map();
 for (const [spellings, canon, category] of UNITS) {
   for (const s of spellings) UNIT_INFO.set(s, { canon, category });
@@ -138,6 +151,8 @@ for (const [route, spellings] of Object.entries(ROUTE_WORDS)) {
   for (const s of spellings) ROUTE_INFO.set(s, route);
 }
 
+// Standard form of a unit ("milligrams" -> "mg") and of a route
+// ("sublingual" -> "SL"), so different spellings compare as equal.
 export function canonUnit(unit) {
   const k = key(unit);
   return UNIT_INFO.get(k)?.canon ?? k;
@@ -148,10 +163,12 @@ export function canonRoute(route) {
   return ROUTE_INFO.get(k) ?? k.toUpperCase();
 }
 
+// Standard form of a number, so ".4", "0.4" and "0.40" all compare as "0.4".
 function canonNumber(s) {
   return String(Number(s));
 }
 
+// Times are stored as four digits, "1415", and shown as "14:15".
 function canonTime(h, m) {
   return String(h).padStart(2, '0') + m;
 }
@@ -169,12 +186,18 @@ export function sameValue(subject, a, b) {
   return comparable(subject, a) === comparable(subject, b);
 }
 
+// Tidies text before reading it: "158 over 94" becomes "158/94".
 function normalize(text) {
   return String(text).replace(/(\d)\s+over\s+(\d)/gi, '$1/$2').replace(/µ/g, 'mc');
 }
 
 // Builds a reader that also recognises the drug names entered in this report.
+// The reader works in two passes: tokenize() picks out the meaningful pieces
+// of the text in order (labels, drugs, routes, milestones, times, numbers,
+// clause breaks, sentence ends), then bindSentence() ties each value to the
+// thing it describes.
 export function makeReader(enteredDrugs = []) {
+  // Every word or phrase the reader knows, and what it means.
   const phrases = new Map();
   for (const w of NEUTRAL_WORDS) phrases.set(w, { type: 'neutral' });
   for (const [route, spellings] of Object.entries(ROUTE_WORDS)) {
@@ -190,6 +213,14 @@ export function makeReader(enteredDrugs = []) {
     if (key(name)) phrases.set(key(name), { type: 'drug', subject: canonicalDrug(name) });
   }
 
+  // One pattern that finds every kind of piece. Each named group is one kind:
+  //   phrase  a known word (vital label, drug, route, milestone)
+  //   time    "14:15"
+  //   at/hrs  times without a colon, "at 1415" or "1415 hrs"
+  //   pair    "158/94"
+  //   single  a number, with its unit if one follows ("0.4 mg", "104 bpm")
+  //   sep     a clause break: comma, semicolon, "and", "then", "but", "while"
+  //   end     a sentence end
   const re = new RegExp([
     `(?<phrase>(?<![a-z0-9])(?:${alternation([...phrases.keys()])})(?![a-z0-9]))`,
     '(?<time>(?<!\\d|\\d[:.])(?<th>[01]?\\d|2[0-3]):(?<tm>[0-5]\\d)(?!\\d|:\\d))',
@@ -203,6 +234,7 @@ export function makeReader(enteredDrugs = []) {
     '(?<end>[.!?](?=\\s|$)|\\n)',
   ].join('|'), 'gi');
 
+  // Turns text into the list of pieces, in the order they appear.
   function tokenize(text) {
     const tokens = [];
     for (const m of text.matchAll(re)) {
@@ -264,12 +296,19 @@ export function makeReader(enteredDrugs = []) {
   return { read };
 }
 
+// Ties the values in one sentence to what they describe, and adds the
+// resulting claims to the list. The sentence is first split into clauses at
+// commas, "and", "then" and so on, because a value almost always belongs to
+// a label or drug in its own clause. The rules are in the comment at the top
+// of this file.
 function bindSentence(tokens, claims) {
   const clauses = [[]];
   for (const t of tokens) {
     if (t.type === 'sep') clauses.push([]);
     else clauses.at(-1).push(t);
   }
+  // A label or drug from the previous clause that never got a value, so it
+  // can be picked up here ("Nitroglycerin was given, 0.4 mg SL").
   let dangling = { label: null, drug: null };
   for (const clause of clauses) {
     let last = null; // most recent label, drug or milestone in this clause
@@ -311,6 +350,9 @@ function bindSentence(tokens, claims) {
           claims.push({ kind: 'time', subject: s?.subject ?? null, time: t.time, raw: t.raw });
           break;
         }
+        // A number. Decide what it describes, in this order: its unit if the
+        // unit settles it, the label just before it, a drug just before it,
+        // or a label or drug left over from the previous clause.
         case 'value': {
           if (t.category === 'duration' || t.category === 'age') return value(t, t.category);
           if (t.category === 'dose') return dose(t, lastDrug ?? next(i, ['drug']) ?? dangling.drug);
@@ -332,6 +374,8 @@ function bindSentence(tokens, claims) {
       }
     });
 
+    // Remember a label or drug in this clause that never got a value, for
+    // the next clause.
     const lastOf = (type) => clause.findLast((t) => t.type === type);
     const label = lastOf('label');
     const drug = lastOf('drug');
@@ -342,6 +386,8 @@ function bindSentence(tokens, claims) {
   }
 }
 
+// Every number in a short entered value, e.g. "158/94" or "93%". Used for
+// structured fields like a vital's value or a patient's age.
 function numbersIn(text) {
   return [...normalize(text).matchAll(/(\d+(?:\.\d+)?|\.\d+)(?:\s*\/\s*(\d+(?:\.\d+)?))?/g)]
     .map((m) => (m[2] ? `${canonNumber(m[1])}/${canonNumber(m[2])}` : canonNumber(m[1])));
@@ -355,6 +401,7 @@ export function factClaims(fact, reader, byId) {
   const minutes = parseTime(fact.time);
   const time = minutes === null ? null : canonTime(Math.floor(minutes / 60), String(minutes % 60).padStart(2, '0'));
 
+  // Claims from the form's own fields, by kind of fact.
   switch (fact.kind) {
     case 'patient':
       for (const v of numbersIn(fact.age ?? '')) add({ kind: 'value', subject: 'age', value: v });
@@ -378,16 +425,20 @@ export function factClaims(fact, reader, byId) {
       if (time) add({ kind: 'time', subject: drug, time });
       break;
     }
+    // A response supports naming the drug it was a response to.
     case 'response': {
       const med = byId.get(fact.to);
       if (med?.drug) add({ kind: 'drug', drug: canonicalDrug(med.drug) });
       break;
     }
+    // A transport's time is when the ambulance left the scene.
     case 'transport':
       if (time) add({ kind: 'time', subject: 'departscene', time });
       break;
   }
 
+  // Claims from the free-text parts (procedure name, destination, notes),
+  // read the same way as the narrative.
   const text = [fact.name, fact.destination, fact.text].filter(Boolean).join('. ');
   if (text) {
     const { claims: read, subjects } = reader.read(text);
@@ -395,6 +446,7 @@ export function factClaims(fact, reader, byId) {
     // A timed finding about pain supports "pain ... at 14:13".
     if (time) for (const subject of subjects) add({ kind: 'time', subject, time });
   }
+  // A fact's time also supports a time written with nothing to tie it to.
   if (time) add({ kind: 'time', subject: null, time });
   return claims;
 }

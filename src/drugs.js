@@ -53,6 +53,9 @@ export const DRUG_ALIASES = {
   'tranexamic acid': 'tranexamic acid', txa: 'tranexamic acid',
 };
 
+// Turns any spelling of a drug into its one standard name, so "Narcan",
+// "narcan" and "naloxone" all become "naloxone". A name not in the list is
+// just lowercased.
 export function canonicalDrug(name) {
   const key = String(name).trim().toLowerCase();
   return DRUG_ALIASES[key] ?? key;

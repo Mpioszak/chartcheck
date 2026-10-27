@@ -1,3 +1,4 @@
+/* Colours, light mode. Red is for errors, amber for warnings, green for passing. */
 :root {
   --bg: #fafaf8;
   --panel: #ffffff;
@@ -12,6 +13,7 @@
   --ok: #1b7a3d;
   --ok-bg: #e8f5ec;
 }
+/* The same colours for dark mode. */
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #161615;
@@ -28,6 +30,7 @@
     --ok-bg: #16301f;
   }
 }
+/* Page layout and type. */
 * { box-sizing: border-box; }
 body {
   margin: 0;
@@ -42,6 +45,7 @@ h2 { font-size: 1.1rem; margin-top: 0; }
 .banner { background: var(--warning-bg); color: var(--warning); padding: 8px 12px; border-radius: 6px; }
 .toolbar { display: flex; flex-wrap: wrap; gap: 8px; }
 section { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+/* Buttons. The main action in each section is filled in blue. */
 button, .button {
   font: inherit; cursor: pointer; padding: 6px 12px; border-radius: 6px;
   border: 1px solid var(--border); background: var(--panel); color: var(--text);
@@ -50,6 +54,7 @@ button:hover, .button:hover { border-color: var(--accent); }
 button[type=submit], #check { background: var(--accent); color: var(--bg); border-color: var(--accent); }
 .danger { color: var(--error); }
 .small { padding: 2px 8px; font-size: 0.85rem; }
+/* The fact form and the inputs inside it. */
 form#add-fact { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
 #fields { display: contents; }
 label { display: flex; flex-direction: column; font-size: 0.85rem; color: var(--muted); gap: 2px; }
@@ -58,9 +63,11 @@ input, select, textarea {
   border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px;
 }
 textarea { width: 100%; font-family: ui-monospace, Menlo, monospace; font-size: 0.9rem; }
+/* The facts table. A row with a problem is tinted red. */
 table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 0.9rem; }
 th, td { text-align: left; padding: 6px; border-bottom: 1px solid var(--border); vertical-align: top; }
 tr.invalid td { background: var(--error-bg); }
+/* Lists of findings from the gap finder and the checker. */
 .findings { list-style: none; padding: 0; margin: 8px 0 0; }
 .findings li { padding: 8px 12px; border-radius: 6px; margin-bottom: 6px; }
 .findings q { font-style: italic; display: block; color: var(--muted); }
@@ -71,6 +78,7 @@ p.error, p.ok { padding: 8px 12px; border-radius: 6px; font-weight: 600; }
 .muted { color: var(--muted); }
 .hint { color: var(--muted); font-size: 0.9rem; }
 code { font-family: ui-monospace, Menlo, monospace; }
+/* On a phone, the table scrolls sideways instead of squashing. */
 @media (max-width: 640px) {
   table { display: block; overflow-x: auto; }
 }
