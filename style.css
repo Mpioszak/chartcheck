@@ -74,6 +74,17 @@ tr.invalid td { background: var(--error-bg); }
 li.error, p.error { background: var(--error-bg); color: var(--error); }
 li.warning { background: var(--warning-bg); color: var(--warning); }
 li.ok, p.ok { background: var(--ok-bg); color: var(--ok); }
+/* Each checked sentence, with its fact ids as small labels after it. */
+h3 { font-size: 1rem; margin: 16px 0 4px; }
+.findings .sentence { color: var(--text); }
+.chips { display: inline-flex; flex-wrap: wrap; gap: 4px; margin-left: 6px; vertical-align: middle; }
+.chip {
+  font: 0.8rem ui-monospace, Menlo, monospace; padding: 0 6px; border-radius: 4px;
+  border: 1px solid currentColor; cursor: default;
+}
+.chip.words { border-style: dashed; }
+.chip.none { font-family: inherit; }
+.problem { margin-top: 4px; }
 p.error, p.ok { padding: 8px 12px; border-radius: 6px; font-weight: 600; }
 .muted { color: var(--muted); }
 .hint { color: var(--muted); font-size: 0.9rem; }

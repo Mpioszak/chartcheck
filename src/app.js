@@ -3,7 +3,8 @@
 //
 //   1. Facts            a form for entering facts, and a table listing them
 //   2. What's missing   the gap finder's results (gaps.js), refreshed on every change
-//   3. Narrative check  a text box for the narrative and the checker's verdict (checker.js)
+//   3. Narrative check  a text box for the narrative, and each sentence with the
+//                       facts it was matched to, or why it was flagged (checker.js)
 //
 // Nothing is sent anywhere. The facts and narrative are kept in the browser's
 // local storage so a page reload doesn't lose them, and can be exported to or
@@ -128,18 +129,48 @@ function renderGaps() {
   else renderFindings(list, gaps);
 }
 
-// Runs the fact checker on the narrative and shows the verdict: accepted if
-// every time, number and drug name traces to a cited fact, rejected
-// otherwise, followed by the errors and the warnings.
+// Runs the fact checker on the narrative and shows each sentence with the
+// facts it was matched to. Sentences that match nothing, or say something the
+// facts don't support, are listed separately with the reason.
 function runCheck() {
   state.narrative = $('#narrative').value;
   save();
   const result = checkNarrative(state.facts, state.narrative);
-  $('#verdict').replaceChildren(result.ok
-    ? el('p', { class: 'ok' }, 'Every time, number and drug name traces to a cited fact.')
-    : el('p', { class: 'error' }, `Rejected: ${result.errors.length} unsupported claim${result.errors.length === 1 ? '' : 's'}.`));
-  renderFindings($('#check-errors'), result.errors, 'error');
+  const matched = result.sentences.filter((s) => s.ok);
+  const flagged = result.sentences.filter((s) => !s.ok);
+  const total = result.sentences.length;
+  $('#verdict').replaceChildren(!total ? '' : flagged.length
+    ? el('p', { class: 'error' }, `${flagged.length} of ${total} sentence${total === 1 ? '' : 's'} flagged.`)
+    : el('p', { class: 'ok' }, `All ${total} sentence${total === 1 ? '' : 's'} matched to entered facts.`));
+  renderSentences($('#flagged'), flagged, 'Flagged sentences');
+  renderSentences($('#matched'), matched, 'Matched sentences');
   renderFindings($('#check-warnings'), result.warnings, 'warning');
+}
+
+// One fact id as a small label, with the fact itself shown on hover. A fact
+// matched only by wording is drawn dashed, since its words aren't verified.
+function factChip(id, wordOnly) {
+  const fact = state.facts.find((f) => f.id === id);
+  return el('span', {
+    class: wordOnly ? 'chip words' : 'chip',
+    title: (fact ? factText(fact) : id) + (wordOnly ? ' (matched by wording)' : ''),
+  }, id);
+}
+
+// Fills one of the two sentence lists: the sentence, its fact labels, and
+// for a flagged sentence what's wrong with it.
+function renderSentences(box, sentences, heading) {
+  if (!sentences.length) return box.replaceChildren();
+  box.replaceChildren(
+    el('h3', {}, `${heading} (${sentences.length})`),
+    el('ul', { class: 'findings' }, ...sentences.map((s) => el('li', { class: s.ok ? 'ok' : 'error' },
+      el('span', { class: 'sentence' }, s.text),
+      el('span', { class: 'chips' }, ...(s.ids.length
+        ? s.ids.map((id) => factChip(id, s.wordOnly.includes(id)))
+        : [el('span', { class: 'chip none' }, 'no fact found')])),
+      ...s.problems.map((p) => el('div', { class: 'problem' }, p)),
+    ))),
+  );
 }
 
 // Redraws everything that depends on the facts.
@@ -207,9 +238,7 @@ $('#clear').addEventListener('click', () => {
   state = { facts: [], narrative: '' };
   save();
   render();
-  $('#verdict').replaceChildren();
-  $('#check-errors').replaceChildren();
-  $('#check-warnings').replaceChildren();
+  for (const id of ['#verdict', '#flagged', '#matched', '#check-warnings']) $(id).replaceChildren();
 });
 
 // "Export JSON": download the facts and narrative as a file.

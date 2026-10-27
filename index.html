@@ -10,7 +10,7 @@
   <!-- Title, the demo-only warning, and the buttons that act on the whole report. -->
   <header>
     <h1>chartcheck</h1>
-    <p class="tag">Enter the facts. Every claim in the narrative has to trace back to one.</p>
+    <p class="tag">Enter the facts. Every sentence in the narrative has to trace back to them.</p>
     <p class="banner">Demo only. Do not enter real patient information. Everything stays in this browser.</p>
     <div class="toolbar">
       <button id="load-sample">Load sample call</button>
@@ -45,11 +45,12 @@
     <!-- 3. Paste or write the narrative, then check it against the facts. -->
     <section id="narrative-section">
       <h2>3. Narrative check</h2>
-      <p class="hint">End each sentence with the ids it came from, like <code>[f3, f8]</code>. Each value has to match the fact it belongs to: a reading its vital, a dose its drug, unit and route, a time its event.</p>
+      <p class="hint">Write ordinary sentences. Each one is matched to the facts it came from and labelled with their ids. A sentence is flagged if a value doesn't match the fact it belongs to (a reading its vital, a dose its drug, unit and route, a time its event) or if nothing in it matches an entered fact.</p>
       <textarea id="narrative" rows="12" spellcheck="false"></textarea>
       <button id="check">Check narrative</button>
       <div id="verdict"></div>
-      <ul id="check-errors" class="findings"></ul>
+      <div id="flagged"></div>
+      <div id="matched"></div>
       <ul id="check-warnings" class="findings"></ul>
     </section>
   </main>

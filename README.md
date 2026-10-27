@@ -2,7 +2,7 @@
 
 A patient care report tool where the narrative can't say anything the medic didn't enter.
 
-The medic enters the call as discrete facts (vitals, meds, times, findings). The narrative is written from those facts, and every sentence has to name the facts it came from. The checker rejects any time, number or drug name that isn't in those facts, and the gap finder points out what a hospital, lawyer or insurer would find missing.
+The medic enters the call as discrete facts (vitals, meds, times, findings). The narrative is written from those facts as ordinary sentences. The checker matches each sentence to the facts it came from, labels it with their ids, and flags any sentence with a time, number or drug name that isn't in those facts, or with nothing in it that matches. The gap finder points out what a hospital, lawyer or insurer would find missing.
 
 **Demo only.** Don't enter real patient information. Everything stays in the browser's local storage; nothing is sent anywhere.
 
@@ -37,7 +37,7 @@ Pages on a private repository needs a paid GitHub plan. On the free plan, make t
 | File | What it does |
 | --- | --- |
 | `src/schema.js` | The fact format: kinds, fields, which are required, and validation. |
-| `src/checker.js` | Checks a narrative against the facts it cites. |
+| `src/checker.js` | Matches each sentence of a narrative to the facts it came from, and flags the ones that don't match. |
 | `src/claims.js` | Reads text into claims: a reading tied to its vital, a dose to its drug and unit, a time to its event. |
 | `src/gaps.js` | Finds what's missing or inconsistent in the facts. |
 | `src/drugs.js` | Drug names and brand names to watch for, mapped to one canonical name. |
@@ -46,24 +46,26 @@ Pages on a private repository needs a paid GitHub plan. On the free plan, make t
 
 ### The narrative format
 
-Each sentence ends with a source tag listing the ids of the facts it came from:
+Write ordinary sentences. Nobody has to label them:
 
 ```
-Initial vitals were BP 158/94, HR 104 and SpO2 93%. [f8, f9, f10]
+Initial vitals were BP 158/94, HR 104 and SpO2 93%.
 ```
 
-A tag covers all text since the previous tag. The checker reads each value together with what it's written next to and compares it with the cited fact of the same kind. It **rejects**:
+The checker splits the narrative into sentences, reads each value together with what it's written next to, and looks for an entered fact that says the same thing about the same subject. The page lists every sentence with the ids of the facts it matched (`f8 f9 f10` above), and lists flagged sentences separately with the reason. A sentence is **flagged** when:
 
-- Text with no tag, and tags that cite facts that don't exist.
-- A reading that doesn't match the cited reading of the vital it's labelled as. `BP 104/93, HR 158` fails even when 104 and 158 were both entered somewhere, and `158/94` is one value, so half of it can't be reused.
-- A dose that doesn't match its drug's cited dose and unit, or a route that doesn't match its drug's cited route. `0.4 mcg` fails against `0.4 mg`, and so does `0.4` with no unit.
-- A time that doesn't match the cited time of the vital, drug or call milestone it's written with.
-- A cited vital whose reading is never stated, so a reading can't be quietly swapped out.
-- A drug name, or a number not tied to anything, that isn't in the cited facts. A real value cited from the wrong fact is still rejected, and the message says where it was entered.
+- Nothing in it matches an entered fact ("Patient was alert and oriented.").
+- A reading doesn't match any entered reading of the vital it's labelled as. `BP 104/93, HR 158` fails even when 104 and 158 were both entered somewhere, and `158/94` is one value, so half of it can't be reused.
+- A dose doesn't match an entered dose of its drug in the same unit, or a route doesn't match its drug's route. `0.4 mcg` fails against `0.4 mg`, and so does `0.4` with no unit.
+- A time doesn't match the entered time of the vital, drug or call milestone it's written with.
+- Values written together only match when taken from different entries. `BP 158/94 at 14:30` fails when 158/94 was taken at 14:15 and a different BP at 14:30, and `fentanyl 50 mcg IV` fails when 50 mcg was given IN and a later 25 mcg IV.
+- A drug, or a number not tied to anything, isn't in the entered facts.
 
-It **warns** when a number is spelled out ("two") because words can't be checked, when an entered fact is never cited, and when a cited med is never stated with its dose, unit and route.
+Sentences with no values ("A 12-lead ECG showed ST elevation in II, III and aVF.") are matched by wording against facts entered as free text: findings, procedures, transport, dispatch reason, responses and the necessity statement. Those labels are drawn dashed, because the words themselves aren't verified. Vitals, meds and call times are never matched by wording, so "Blood pressure was stable." is flagged rather than matched to a BP entry.
 
-A value belongs to the nearest label before it in the same clause. Clauses split at commas, semicolons, colons, "and", "then", "but" and "while". The words it recognises as labels, units, routes and call milestones are listed in `src/claims.js`. Brand and generic names count as the same drug (Narcan and naloxone). Readings can be written `158/94`, `158 / 94` or `158 over 94`, and times `14:32`, `at 1432` or `1432 hrs`.
+It **warns** when a number is spelled out ("two") because words can't be checked, when an entered fact matches no sentence, and when a med is mentioned but never stated with its dose, unit and route. Old-style tags like `[f3, f8]` are ignored, with a warning.
+
+A value belongs to the nearest label before it in the same clause. Clauses split at commas, semicolons, colons, "and", "then", "but" and "while". The words it recognises as labels, units, routes and call milestones are listed in `src/claims.js`. Brand and generic names count as the same drug (Narcan and naloxone). Readings can be written `158/94`, `158 / 94` or `158 over 94`, and times `14:32`, `at 1432` or `1432 hrs`. Sentences end at `.`, `!`, `?` or a line break, but not after abbreviations like `St.` or inside numbers like `0.4`.
 
 ### Gap rules
 
@@ -77,12 +79,14 @@ A value belongs to the nearest label before it in the same clause. Clauses split
 
 ### What it doesn't catch yet
 
-- **Invented words inside a tagged sentence.** Only values and drug names are checked. A sentence citing the findings could still add "alert and oriented" when nobody entered mental status. This is the next thing to close.
-- A time in a clause that names no vital, drug or milestone (`At 14:20, ...`) is only checked against the cited facts' times, not tied to one event.
+- **Invented words inside a matched sentence.** Only values and drug names are checked. A sentence that matches the findings could still add "alert and oriented" when nobody entered mental status. This is the next thing to close.
+- A time in a clause that names no vital, drug or milestone (`At 14:20, ...`) is only checked against the times of all entered facts, not tied to one event.
+- Two values of the same vital in one clause with two times (`pain 8/10 at 14:13 to 5/10 at 14:25`) are each checked against an entry at one of those times, so swapping the two times isn't caught.
+- Wording matches can be loose: a sentence that shares a few words with a free-text fact is labelled with it.
 - Drugs not in `src/drugs.js` and not entered by the medic won't be recognised as drugs.
 
 ## Next
 
-1. Generate the narrative with Claude, prompted to tag every sentence, and run it through the checker before showing it. For the prototype the user pastes their own API key, which is called from the browser and kept in local storage. Before anyone else uses it, move the key behind a small proxy.
-2. Check the words of each sentence against its cited facts, not just the numbers.
+1. Generate the narrative with Claude and run it through the checker before showing it. For the prototype the user pastes their own API key, which is called from the browser and kept in local storage. Before anyone else uses it, move the key behind a small proxy.
+2. Check the words of each sentence against its matched facts, not just the numbers.
 3. Edit facts in place, and add gap rules that match your protocols.
